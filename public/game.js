@@ -11,11 +11,11 @@ let targetBall = { x: 700, y: 450 }
 let boostPads = [] 
 let keys = {}
 
-// VARIABLES DE FÍSICA LOCAL PARA PREDICCIÓN
+// VARIABLES DE FÍSICA CALIBRADAS (Ajustadas para evitar el deslizamiento extra)
 let localVelX = 0;
 let localVelY = 0;
-const friction = 0.92; // Debe ser igual a la del server.js
-const acc = 0.8;       // Aceleración
+const friction = 0.90; // Un pelín más fuerte que el server para no pasarnos
+const acc = 0.7;       // Aceleración más controlada
 
 // SOPORTE MÓVIL
 let joystick = { active: false, x: 0, y: 0, startX: 0, startY: 0 };
@@ -36,7 +36,7 @@ document.addEventListener("keyup", (e) => {
     keys[key] = false;
 });
 
-// Touch Events (Joystick)
+// Touch Events para móvil
 canvas.addEventListener("touchstart", (e) => {
     const touch = e.touches[0];
     const rect = canvas.getBoundingClientRect();
@@ -80,7 +80,7 @@ socket.on("state", (state) => {
 
 socket.on("playerInfoUpdate", (fullPlayerData) => {
     players = fullPlayerData;
-    updateSidePanels();
+    updateSidePanels(); // Esto actualiza las fotos y banners
 });
 
 function drawPlayers() {
@@ -88,15 +88,14 @@ function drawPlayers() {
         if (p.x === undefined || isNaN(p.x)) { p.x = p.targetX || 700; p.y = p.targetY || 450; }
 
         if (p.id === socket.id) {
-            // --- PREDICCIÓN CON FRICCIÓN SIMULADA ---
+            // Predicción con fricción corregida
             let moveX = 0; let moveY = 0;
             if (keys['w'] || touchInput.w) moveY -= 1;
             if (keys['s'] || touchInput.s) moveY += 1;
             if (keys['a'] || touchInput.a) moveX -= 1;
             if (keys['d'] || touchInput.d) moveX += 1;
 
-            // Aplicar aceleración y fricción
-            let currentAcc = (keys['shift'] || touchInput.shift) && p.boost > 0 ? acc * 1.8 : acc;
+            let currentAcc = (keys['shift'] || touchInput.shift) && p.boost > 0 ? acc * 1.6 : acc;
             localVelX += moveX * currentAcc;
             localVelY += moveY * currentAcc;
             localVelX *= friction;
@@ -105,17 +104,16 @@ function drawPlayers() {
             p.x += localVelX;
             p.y += localVelY;
 
-            // Reconciliación suave con el servidor
-            p.x += (p.targetX - p.x) * 0.15;
-            p.y += (p.targetY - p.y) * 0.15;
+            // Reconciliación más agresiva para evitar el deslizamiento fantasma
+            p.x += (p.targetX - p.x) * 0.25;
+            p.y += (p.targetY - p.y) * 0.25;
             
-            // Si la diferencia es masiva (lag spike), teletransportar
-            if(Math.hypot(p.x - p.targetX, p.y - p.targetY) > 80) {
+            if(Math.hypot(p.x - p.targetX, p.y - p.targetY) > 60) {
                 p.x = p.targetX; p.y = p.targetY;
             }
         } else {
-            p.x += (p.targetX - p.x) * 0.4;
-            p.y += (p.targetY - p.y) * 0.4;
+            p.x += (p.targetX - p.x) * 0.45;
+            p.y += (p.targetY - p.y) * 0.45;
         }
 
         ctx.beginPath();
@@ -129,11 +127,10 @@ function drawPlayers() {
 }
 
 function drawBall() {
-    let distToMe = 1000;
-    const myPlayer = players.find(p => p.id === socket.id);
-    if(myPlayer) distToMe = Math.hypot(ball.x - myPlayer.x, ball.y - myPlayer.y);
+    // Si el balón se mueve rápido, bajamos el suavizado para que no se vea "chicloso"
+    let ballSpeed = Math.hypot(targetBall.x - ball.x, targetBall.y - ball.y);
+    let lerpFactor = ballSpeed > 15 ? 0.8 : 0.4; 
 
-    let lerpFactor = distToMe < 70 ? 0.8 : 0.3; 
     ball.x += (targetBall.x - ball.x) * lerpFactor;
     ball.y += (targetBall.y - ball.y) * lerpFactor;
 
@@ -187,10 +184,18 @@ function updateSidePanels() {
     players.forEach(p => {
         const card = document.createElement("div");
         card.className = "playerCard";
-        card.innerHTML = `<div class="info-container" style="background-image: url('${p.banner}')">
-            <div class="name">${p.name}</div>
-            <div class="playerTitle" style="color: ${p.titleColor}">${p.title}</div>
-        </div>`;
+        // Aseguramos que las imágenes tengan un fallback si no cargan
+        const pfpUrl = p.pfp || 'assets/default_pfp.png';
+        const bannerUrl = p.banner || '';
+        
+        card.innerHTML = `
+            <div class="avatar-container">
+                <img src="${pfpUrl}" class="pfp" onerror="this.src='assets/default_pfp.png'">
+            </div>
+            <div class="info-container" style="background-image: url('${bannerUrl}')">
+                <div class="name">${p.name}</div>
+                <div class="playerTitle" style="color: ${p.titleColor}">${p.title}</div>
+            </div>`;
         if(p.team === "red") redDiv.appendChild(card);
         else blueDiv.appendChild(card);
     });
