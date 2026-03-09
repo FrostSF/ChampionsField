@@ -11,7 +11,13 @@ let targetBall = { x: 700, y: 450 }
 let boostPads = [] 
 let keys = {}
 
-// CONTROLES MÓVIL
+// VARIABLES DE FÍSICA LOCAL CALIBRADAS
+let localVelX = 0;
+let localVelY = 0;
+const friction = 0.89; // Bajamos de 0.92 a 0.89 para que frene más rápido localmente
+const acc = 0.8;       
+
+// SOPORTE MÓVIL
 let joystick = { active: false, x: 0, y: 0, startX: 0, startY: 0 };
 let touchInput = { w: false, s: false, a: false, d: false, shift: false };
 
@@ -30,7 +36,7 @@ document.addEventListener("keyup", (e) => {
     keys[key] = false;
 });
 
-// Touch Events
+// Touch Events (Joystick)
 canvas.addEventListener("touchstart", (e) => {
     const touch = e.touches[0];
     const rect = canvas.getBoundingClientRect();
@@ -39,6 +45,7 @@ canvas.addEventListener("touchstart", (e) => {
     joystick.startY = (touch.clientY - rect.top) * (canvas.height / rect.height);
     joystick.x = joystick.startX; joystick.y = joystick.startY;
 });
+
 canvas.addEventListener("touchmove", (e) => {
     if (!joystick.active) return;
     const touch = e.touches[0];
@@ -51,6 +58,7 @@ canvas.addEventListener("touchmove", (e) => {
     touchInput.w = dy < -20; touchInput.s = dy > 20;
     touchInput.shift = Math.abs(dx) > 60 || Math.abs(dy) > 60;
 });
+
 canvas.addEventListener("touchend", () => {
     joystick.active = false;
     touchInput = { w: false, s: false, a: false, d: false, shift: false };
@@ -77,23 +85,35 @@ socket.on("playerInfoUpdate", (fullPlayerData) => {
 
 function drawPlayers() {
     players.forEach(p => {
-        if (p.x === undefined) { p.x = p.targetX; p.y = p.targetY; }
+        if (p.x === undefined || isNaN(p.x)) { p.x = p.targetX || 700; p.y = p.targetY || 450; }
 
         if (p.id === socket.id) {
-            // Predicción simplificada sin fricción acumulada (evita el lag pesado)
-            let speed = (keys['shift'] || touchInput.shift) && p.boost > 0 ? 9 : 5; 
-            if (keys['w'] || touchInput.w) p.y -= speed;
-            if (keys['s'] || touchInput.s) p.y += speed;
-            if (keys['a'] || touchInput.a) p.x -= speed;
-            if (keys['d'] || touchInput.d) p.x += speed;
+            // --- PREDICCIÓN CON FRICCIÓN AJUSTADA ---
+            let moveX = 0; let moveY = 0;
+            if (keys['w'] || touchInput.w) moveY -= 1;
+            if (keys['s'] || touchInput.s) moveY += 1;
+            if (keys['a'] || touchInput.a) moveX -= 1;
+            if (keys['d'] || touchInput.d) moveX += 1;
 
-            // Suavizado rápido hacia la posición del server
+            let currentAcc = (keys['shift'] || touchInput.shift) && p.boost > 0 ? acc * 1.8 : acc;
+            localVelX += moveX * currentAcc;
+            localVelY += moveY * currentAcc;
+            localVelX *= friction;
+            localVelY *= friction;
+
+            p.x += localVelX;
+            p.y += localVelY;
+
+            // Reconciliación con el servidor
+            p.x += (p.targetX - p.x) * 0.15;
+            p.y += (p.targetY - p.y) * 0.15;
+            
+            if(Math.hypot(p.x - p.targetX, p.y - p.targetY) > 80) {
+                p.x = p.targetX; p.y = p.targetY;
+            }
+        } else {
             p.x += (p.targetX - p.x) * 0.4;
             p.y += (p.targetY - p.y) * 0.4;
-        } else {
-            // Demás jugadores con interpolación alta
-            p.x += (p.targetX - p.x) * 0.5;
-            p.y += (p.targetY - p.y) * 0.5;
         }
 
         ctx.beginPath();
@@ -107,13 +127,32 @@ function drawPlayers() {
 }
 
 function drawBall() {
-    // Balón casi instantáneo para que el choque se sienta real
-    ball.x += (targetBall.x - ball.x) * 0.7;
-    ball.y += (targetBall.y - ball.y) * 0.7;
+    let distToMe = 1000;
+    const myPlayer = players.find(p => p.id === socket.id);
+    if(myPlayer) distToMe = Math.hypot(ball.x - myPlayer.x, ball.y - myPlayer.y);
+
+    let lerpFactor = distToMe < 70 ? 0.8 : 0.3; 
+    ball.x += (targetBall.x - ball.x) * lerpFactor;
+    ball.y += (targetBall.y - ball.y) * lerpFactor;
 
     ctx.beginPath(); ctx.fillStyle = "white";
     ctx.arc(ball.x, ball.y, 10, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = "black"; ctx.stroke();
+}
+
+function drawBoostUI() {
+    const myPlayer = players.find(p => p.id === socket.id);
+    if (!myPlayer || myPlayer.boost === undefined) return;
+    const x = 1300, y = 800, radius = 60;
+    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)"; ctx.lineWidth = 12; ctx.stroke();
+    const boostPerc = myPlayer.boost / 100;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * boostPerc));
+    ctx.strokeStyle = myPlayer.boost > 25 ? "#ffae00" : "#ff3b3b";
+    ctx.lineWidth = 12; ctx.lineCap = "round"; ctx.stroke();
+    ctx.fillStyle = "white"; ctx.font = "bold 28px Segoe UI"; ctx.textAlign = "center";
+    ctx.fillText(Math.floor(myPlayer.boost), x, y + 10);
 }
 
 function draw() {
@@ -122,30 +161,18 @@ function draw() {
     else { ctx.fillStyle = "#1b7a2f"; ctx.fillRect(0, 0, 1400, 900); }
     
     boostPads.forEach(pad => {
-        ctx.beginPath(); ctx.fillStyle = "rgba(255, 215, 0, 0.4)";
+        ctx.beginPath(); ctx.fillStyle = "rgba(255, 215, 0, 0.3)";
         ctx.arc(pad.x, pad.y, 25, 0, Math.PI * 2); ctx.fill();
     });
 
     drawPlayers();
     drawBall();
-    
-    // UI de Boost
-    const myPlayer = players.find(p => p.id === socket.id);
-    if (myPlayer && myPlayer.boost !== undefined) {
-        const x = 1300, y = 800;
-        ctx.beginPath(); ctx.arc(x, y, 60, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(0,0,0,0.5)"; ctx.lineWidth = 12; ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(x, y, 60, -Math.PI/2, -Math.PI/2 + (Math.PI*2*(myPlayer.boost/100)));
-        ctx.strokeStyle = myPlayer.boost > 20 ? "orange" : "red"; ctx.stroke();
-        ctx.fillStyle = "white"; ctx.font = "24px Arial"; ctx.fillText(Math.floor(myPlayer.boost), x, y+10);
-    }
-
+    drawBoostUI();
     if (joystick.active) {
         ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, 50, 0, Math.PI * 2);
-        ctx.strokeStyle = "white"; ctx.stroke();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)"; ctx.lineWidth = 3; ctx.stroke();
         ctx.beginPath(); ctx.arc(joystick.x, joystick.y, 25, 0, Math.PI * 2);
-        ctx.fillStyle = "white"; ctx.fill();
+        ctx.fillStyle = "rgba(255, 255, 255, 0.5)"; ctx.fill();
     }
     requestAnimationFrame(draw);
 }
@@ -158,11 +185,15 @@ function updateSidePanels() {
     players.forEach(p => {
         const card = document.createElement("div");
         card.className = "playerCard";
+        
+        // PARCHE DE FOTOS DE PERFIL Y BANNERS
         card.innerHTML = `
-            <div class="avatar-container"><img src="${p.pfp}" class="pfp"></div>
-            <div class="info-container" style="background-image: url('${p.banner}')">
+            <div class="avatar-container">
+                <img src="${p.pfp || 'assets/default_pfp.png'}" class="pfp">
+            </div>
+            <div class="info-container" style="background-image: url('${p.banner || ''}')">
                 <div class="name">${p.name}</div>
-                <div class="playerTitle" style="color: ${p.titleColor}">${p.title}</div>
+                <div class="playerTitle" style="color: ${p.titleColor || '#fff'}">${p.title || ''}</div>
             </div>`;
         if(p.team === "red") redDiv.appendChild(card);
         else blueDiv.appendChild(card);
