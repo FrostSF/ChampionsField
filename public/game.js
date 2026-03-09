@@ -9,7 +9,7 @@ fieldImg.src = "assets/field.png";
 let players = [] 
 let ball = { x: 700, y: 450 } 
 let targetBall = { x: 700, y: 450 } 
-let boostPads = [] // Guardaremos los pads que mande el servidor
+let boostPads = [] 
 let keys = {}
 
 const params = new URLSearchParams(window.location.search)
@@ -37,7 +37,6 @@ socket.on("state", (state) => {
     state.players.forEach(serverPlayer => {
         let localPlayer = players.find(p => p.id === serverPlayer.id);
         if (localPlayer) {
-            // Guardamos el destino para la interpolación
             localPlayer.targetX = serverPlayer.x;
             localPlayer.targetY = serverPlayer.y;
             localPlayer.team = serverPlayer.team;
@@ -45,7 +44,7 @@ socket.on("state", (state) => {
         }
     });
     targetBall = state.ball;
-    boostPads = state.boostPads || []; // Recibimos la posición de los pads
+    boostPads = state.boostPads || [];
 });
 
 function updateSidePanels() {
@@ -74,54 +73,57 @@ function updateSidePanels() {
 function drawBoostPads() {
     boostPads.forEach(pad => {
         ctx.beginPath();
-        ctx.fillStyle = "rgba(255, 215, 0, 0.4)"; // Amarillo brillante
+        ctx.fillStyle = "rgba(255, 215, 0, 0.4)";
         ctx.arc(pad.x, pad.y, 25, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = "gold";
         ctx.lineWidth = 3;
         ctx.stroke();
-        
-        // Efecto de brillo interno
-        ctx.beginPath();
-        ctx.fillStyle = "white";
-        ctx.arc(pad.x, pad.y, 5, 0, Math.PI * 2);
-        ctx.fill();
     });
 }
 
 function drawPlayers() {
     players.forEach(p => {
-        // CORRECCIÓN DE VISIBILIDAD: Si no hay posición previa, saltar a la del servidor
-        if (p.x === undefined || isNaN(p.x)) p.x = p.targetX;
-        if (p.y === undefined || isNaN(p.y)) p.y = p.targetY;
+        if (p.x === undefined || isNaN(p.x)) p.x = p.targetX || 700;
+        if (p.y === undefined || isNaN(p.y)) p.y = p.targetY || 450;
 
-        // Solo dibujar si tenemos datos válidos
-        if (p.targetX !== undefined && p.targetY !== undefined) {
-            p.x += (p.targetX - p.x) * 0.3; // Interpolación suave
-            p.y += (p.targetY - p.y) * 0.3;
+        if (p.id === socket.id) {
+            // PREDICCIÓN LOCAL: Para que TÚ te muevas sin delay
+            let speed = keys['shift'] && p.boost > 0 ? 8 : 5; 
+            if (keys['w']) p.y -= speed;
+            if (keys['s']) p.y += speed;
+            if (keys['a']) p.x -= speed;
+            if (keys['d']) p.x += speed;
 
-            ctx.beginPath()
-            ctx.fillStyle = p.team === "blue" ? "#00bcff" : "#ff3b3b"
-            ctx.arc(p.x, p.y, 15, 0, Math.PI * 2)
-            ctx.fill()
-            ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke()
-
-            // Etiquetas de nombre y título
-            ctx.textAlign = "center"; 
-            ctx.font = "bold 14px Segoe UI"; 
-            ctx.fillStyle = "white";
-            ctx.fillText(p.name, p.x, p.y - 35)
-            
-            ctx.font = "bold 10px Segoe UI"; 
-            ctx.fillStyle = p.titleColor || "#aaa";
-            ctx.fillText(p.title, p.x, p.y - 22)
+            // Suavizamos la posición real que manda el servidor (corrección de error)
+            p.x += (p.targetX - p.x) * 0.1; 
+            p.y += (p.targetY - p.y) * 0.1;
+        } else {
+            // INTERPOLACIÓN para los demás (valor 0.6 para que no sea lento)
+            p.x += (p.targetX - p.x) * 0.6;
+            p.y += (p.targetY - p.y) * 0.6;
         }
+
+        ctx.beginPath()
+        ctx.fillStyle = p.team === "blue" ? "#00bcff" : "#ff3b3b"
+        ctx.arc(p.x, p.y, 15, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke()
+
+        ctx.textAlign = "center"; 
+        ctx.font = "bold 14px Segoe UI"; 
+        ctx.fillStyle = "white";
+        ctx.fillText(p.name, p.x, p.y - 35)
+        
+        ctx.font = "bold 10px Segoe UI"; 
+        ctx.fillStyle = p.titleColor || "#aaa";
+        ctx.fillText(p.title, p.x, p.y - 22)
     })
 }
 
 function drawBall() {
-    ball.x += (targetBall.x - ball.x) * 0.3;
-    ball.y += (targetBall.y - ball.y) * 0.3;
+    ball.x += (targetBall.x - ball.x) * 0.6;
+    ball.y += (targetBall.y - ball.y) * 0.6;
 
     ctx.beginPath(); 
     ctx.fillStyle = "white"; 
@@ -138,14 +140,12 @@ function drawBoostUI() {
     const y = 800;
     const radius = 60;
 
-    // Fondo gris del círculo
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
     ctx.lineWidth = 12;
     ctx.stroke();
 
-    // Progreso del Boost
     const boostPerc = myPlayer.boost / 100;
     ctx.beginPath();
     ctx.arc(x, y, radius, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * boostPerc));
@@ -154,7 +154,6 @@ function drawBoostUI() {
     ctx.lineCap = "round";
     ctx.stroke();
 
-    // Número central
     ctx.fillStyle = "white";
     ctx.font = "bold 28px Segoe UI";
     ctx.textAlign = "center";
@@ -164,7 +163,6 @@ function drawBoostUI() {
 function draw() {
     ctx.clearRect(0, 0, 1400, 900)
     
-    // Fondo de cancha
     if (fieldImg.complete) {
         ctx.drawImage(fieldImg, 0, 0, 1400, 900);
     } else {
@@ -179,7 +177,6 @@ function draw() {
     requestAnimationFrame(draw)
 }
 
-// Envío de inputs al servidor
 setInterval(() => {
     socket.emit("move", { 
         w: keys["w"], a: keys["a"], s: keys["s"], d: keys["d"], 
