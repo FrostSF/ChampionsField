@@ -11,13 +11,7 @@ let targetBall = { x: 700, y: 450 }
 let boostPads = [] 
 let keys = {}
 
-// VARIABLES DE FÍSICA CALIBRADAS (Ajustadas para evitar el deslizamiento extra)
-let localVelX = 0;
-let localVelY = 0;
-const friction = 0.90; // Un pelín más fuerte que el server para no pasarnos
-const acc = 0.7;       // Aceleración más controlada
-
-// SOPORTE MÓVIL
+// CONTROLES MÓVIL
 let joystick = { active: false, x: 0, y: 0, startX: 0, startY: 0 };
 let touchInput = { w: false, s: false, a: false, d: false, shift: false };
 
@@ -36,7 +30,7 @@ document.addEventListener("keyup", (e) => {
     keys[key] = false;
 });
 
-// Touch Events para móvil
+// Touch Events
 canvas.addEventListener("touchstart", (e) => {
     const touch = e.touches[0];
     const rect = canvas.getBoundingClientRect();
@@ -45,7 +39,6 @@ canvas.addEventListener("touchstart", (e) => {
     joystick.startY = (touch.clientY - rect.top) * (canvas.height / rect.height);
     joystick.x = joystick.startX; joystick.y = joystick.startY;
 });
-
 canvas.addEventListener("touchmove", (e) => {
     if (!joystick.active) return;
     const touch = e.touches[0];
@@ -58,7 +51,6 @@ canvas.addEventListener("touchmove", (e) => {
     touchInput.w = dy < -20; touchInput.s = dy > 20;
     touchInput.shift = Math.abs(dx) > 60 || Math.abs(dy) > 60;
 });
-
 canvas.addEventListener("touchend", () => {
     joystick.active = false;
     touchInput = { w: false, s: false, a: false, d: false, shift: false };
@@ -80,40 +72,28 @@ socket.on("state", (state) => {
 
 socket.on("playerInfoUpdate", (fullPlayerData) => {
     players = fullPlayerData;
-    updateSidePanels(); // Esto actualiza las fotos y banners
+    updateSidePanels();
 });
 
 function drawPlayers() {
     players.forEach(p => {
-        if (p.x === undefined || isNaN(p.x)) { p.x = p.targetX || 700; p.y = p.targetY || 450; }
+        if (p.x === undefined) { p.x = p.targetX; p.y = p.targetY; }
 
         if (p.id === socket.id) {
-            // Predicción con fricción corregida
-            let moveX = 0; let moveY = 0;
-            if (keys['w'] || touchInput.w) moveY -= 1;
-            if (keys['s'] || touchInput.s) moveY += 1;
-            if (keys['a'] || touchInput.a) moveX -= 1;
-            if (keys['d'] || touchInput.d) moveX += 1;
+            // Predicción simplificada sin fricción acumulada (evita el lag pesado)
+            let speed = (keys['shift'] || touchInput.shift) && p.boost > 0 ? 9 : 5; 
+            if (keys['w'] || touchInput.w) p.y -= speed;
+            if (keys['s'] || touchInput.s) p.y += speed;
+            if (keys['a'] || touchInput.a) p.x -= speed;
+            if (keys['d'] || touchInput.d) p.x += speed;
 
-            let currentAcc = (keys['shift'] || touchInput.shift) && p.boost > 0 ? acc * 1.6 : acc;
-            localVelX += moveX * currentAcc;
-            localVelY += moveY * currentAcc;
-            localVelX *= friction;
-            localVelY *= friction;
-
-            p.x += localVelX;
-            p.y += localVelY;
-
-            // Reconciliación más agresiva para evitar el deslizamiento fantasma
-            p.x += (p.targetX - p.x) * 0.25;
-            p.y += (p.targetY - p.y) * 0.25;
-            
-            if(Math.hypot(p.x - p.targetX, p.y - p.targetY) > 60) {
-                p.x = p.targetX; p.y = p.targetY;
-            }
+            // Suavizado rápido hacia la posición del server
+            p.x += (p.targetX - p.x) * 0.4;
+            p.y += (p.targetY - p.y) * 0.4;
         } else {
-            p.x += (p.targetX - p.x) * 0.45;
-            p.y += (p.targetY - p.y) * 0.45;
+            // Demás jugadores con interpolación alta
+            p.x += (p.targetX - p.x) * 0.5;
+            p.y += (p.targetY - p.y) * 0.5;
         }
 
         ctx.beginPath();
@@ -127,31 +107,13 @@ function drawPlayers() {
 }
 
 function drawBall() {
-    // Si el balón se mueve rápido, bajamos el suavizado para que no se vea "chicloso"
-    let ballSpeed = Math.hypot(targetBall.x - ball.x, targetBall.y - ball.y);
-    let lerpFactor = ballSpeed > 15 ? 0.8 : 0.4; 
-
-    ball.x += (targetBall.x - ball.x) * lerpFactor;
-    ball.y += (targetBall.y - ball.y) * lerpFactor;
+    // Balón casi instantáneo para que el choque se sienta real
+    ball.x += (targetBall.x - ball.x) * 0.7;
+    ball.y += (targetBall.y - ball.y) * 0.7;
 
     ctx.beginPath(); ctx.fillStyle = "white";
     ctx.arc(ball.x, ball.y, 10, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = "black"; ctx.stroke();
-}
-
-function drawBoostUI() {
-    const myPlayer = players.find(p => p.id === socket.id);
-    if (!myPlayer || myPlayer.boost === undefined) return;
-    const x = 1300, y = 800, radius = 60;
-    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)"; ctx.lineWidth = 12; ctx.stroke();
-    const boostPerc = myPlayer.boost / 100;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * boostPerc));
-    ctx.strokeStyle = myPlayer.boost > 25 ? "#ffae00" : "#ff3b3b";
-    ctx.lineWidth = 12; ctx.lineCap = "round"; ctx.stroke();
-    ctx.fillStyle = "white"; ctx.font = "bold 28px Segoe UI"; ctx.textAlign = "center";
-    ctx.fillText(Math.floor(myPlayer.boost), x, y + 10);
 }
 
 function draw() {
@@ -160,18 +122,30 @@ function draw() {
     else { ctx.fillStyle = "#1b7a2f"; ctx.fillRect(0, 0, 1400, 900); }
     
     boostPads.forEach(pad => {
-        ctx.beginPath(); ctx.fillStyle = "rgba(255, 215, 0, 0.3)";
+        ctx.beginPath(); ctx.fillStyle = "rgba(255, 215, 0, 0.4)";
         ctx.arc(pad.x, pad.y, 25, 0, Math.PI * 2); ctx.fill();
     });
 
     drawPlayers();
     drawBall();
-    drawBoostUI();
+    
+    // UI de Boost
+    const myPlayer = players.find(p => p.id === socket.id);
+    if (myPlayer && myPlayer.boost !== undefined) {
+        const x = 1300, y = 800;
+        ctx.beginPath(); ctx.arc(x, y, 60, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(0,0,0,0.5)"; ctx.lineWidth = 12; ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, 60, -Math.PI/2, -Math.PI/2 + (Math.PI*2*(myPlayer.boost/100)));
+        ctx.strokeStyle = myPlayer.boost > 20 ? "orange" : "red"; ctx.stroke();
+        ctx.fillStyle = "white"; ctx.font = "24px Arial"; ctx.fillText(Math.floor(myPlayer.boost), x, y+10);
+    }
+
     if (joystick.active) {
         ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, 50, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)"; ctx.lineWidth = 3; ctx.stroke();
+        ctx.strokeStyle = "white"; ctx.stroke();
         ctx.beginPath(); ctx.arc(joystick.x, joystick.y, 25, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255, 255, 255, 0.5)"; ctx.fill();
+        ctx.fillStyle = "white"; ctx.fill();
     }
     requestAnimationFrame(draw);
 }
@@ -184,15 +158,9 @@ function updateSidePanels() {
     players.forEach(p => {
         const card = document.createElement("div");
         card.className = "playerCard";
-        // Aseguramos que las imágenes tengan un fallback si no cargan
-        const pfpUrl = p.pfp || 'assets/default_pfp.png';
-        const bannerUrl = p.banner || '';
-        
         card.innerHTML = `
-            <div class="avatar-container">
-                <img src="${pfpUrl}" class="pfp" onerror="this.src='assets/default_pfp.png'">
-            </div>
-            <div class="info-container" style="background-image: url('${bannerUrl}')">
+            <div class="avatar-container"><img src="${p.pfp}" class="pfp"></div>
+            <div class="info-container" style="background-image: url('${p.banner}')">
                 <div class="name">${p.name}</div>
                 <div class="playerTitle" style="color: ${p.titleColor}">${p.title}</div>
             </div>`;
