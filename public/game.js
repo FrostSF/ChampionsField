@@ -7,8 +7,9 @@ const fieldImg = new Image();
 fieldImg.src = "assets/field.png"; 
 
 let players = [] 
-let ball = { x: 700, y: 450 } // Posición inicial por defecto
-let targetBall = { x: 700, y: 450 } // Destino real enviado por el servidor
+let ball = { x: 700, y: 450 } 
+let targetBall = { x: 700, y: 450 } 
+let boostPads = [] // Guardaremos los pads que mande el servidor
 let keys = {}
 
 const params = new URLSearchParams(window.location.search)
@@ -17,9 +18,15 @@ const playerData = JSON.parse(localStorage.getItem("playerData"))
 
 socket.emit("joinGame", { room: room, ...playerData })
 
-// Detección de teclas (añadido Shift para el Boost)
-document.addEventListener("keydown", (e) => keys[e.key === "Shift" ? "shift" : e.key.toLowerCase()] = true)
-document.addEventListener("keyup", (e) => keys[e.key === "Shift" ? "shift" : e.key.toLowerCase()] = false)
+// Detección de teclas
+document.addEventListener("keydown", (e) => {
+    const key = e.key === "Shift" ? "shift" : e.key.toLowerCase();
+    keys[key] = true;
+});
+document.addEventListener("keyup", (e) => {
+    const key = e.key === "Shift" ? "shift" : e.key.toLowerCase();
+    keys[key] = false;
+});
 
 socket.on("playerInfoUpdate", (fullPlayerData) => {
     players = fullPlayerData; 
@@ -27,18 +34,18 @@ socket.on("playerInfoUpdate", (fullPlayerData) => {
 });
 
 socket.on("state", (state) => {
-    // Sincronizar destino de los jugadores
     state.players.forEach(serverPlayer => {
         let localPlayer = players.find(p => p.id === serverPlayer.id);
         if (localPlayer) {
+            // Guardamos el destino para la interpolación
             localPlayer.targetX = serverPlayer.x;
             localPlayer.targetY = serverPlayer.y;
             localPlayer.team = serverPlayer.team;
-            localPlayer.boost = serverPlayer.boost; // Recibimos el valor de boost
+            localPlayer.boost = serverPlayer.boost;
         }
     });
-    // Sincronizar destino del balón
     targetBall = state.ball;
+    boostPads = state.boostPads || []; // Recibimos la posición de los pads
 });
 
 function updateSidePanels() {
@@ -64,31 +71,57 @@ function updateSidePanels() {
     });
 }
 
+function drawBoostPads() {
+    boostPads.forEach(pad => {
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(255, 215, 0, 0.4)"; // Amarillo brillante
+        ctx.arc(pad.x, pad.y, 25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "gold";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        // Efecto de brillo interno
+        ctx.beginPath();
+        ctx.fillStyle = "white";
+        ctx.arc(pad.x, pad.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
 function drawPlayers() {
     players.forEach(p => {
-        if (p.x === undefined) { p.x = p.targetX; p.y = p.targetY; }
-        
-        // INTERPOLACIÓN: Suaviza el movimiento de los jugadores
-        p.x += (p.targetX - p.x) * 0.25;
-        p.y += (p.targetY - p.y) * 0.25;
+        // CORRECCIÓN DE VISIBILIDAD: Si no hay posición previa, saltar a la del servidor
+        if (p.x === undefined || isNaN(p.x)) p.x = p.targetX;
+        if (p.y === undefined || isNaN(p.y)) p.y = p.targetY;
 
-        ctx.beginPath()
-        ctx.fillStyle = p.team === "blue" ? "#00bcff" : "#ff3b3b"
-        ctx.arc(p.x, p.y, 15, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke()
+        // Solo dibujar si tenemos datos válidos
+        if (p.targetX !== undefined && p.targetY !== undefined) {
+            p.x += (p.targetX - p.x) * 0.3; // Interpolación suave
+            p.y += (p.targetY - p.y) * 0.3;
 
-        ctx.textAlign = "center"; ctx.font = "bold 14px Segoe UI"; ctx.fillStyle = "white";
-        ctx.fillText(p.name, p.x, p.y - 35)
-        ctx.font = "bold 10px Segoe UI"; ctx.fillStyle = p.titleColor || "#aaa";
-        ctx.fillText(p.title, p.x, p.y - 22)
+            ctx.beginPath()
+            ctx.fillStyle = p.team === "blue" ? "#00bcff" : "#ff3b3b"
+            ctx.arc(p.x, p.y, 15, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke()
+
+            // Etiquetas de nombre y título
+            ctx.textAlign = "center"; 
+            ctx.font = "bold 14px Segoe UI"; 
+            ctx.fillStyle = "white";
+            ctx.fillText(p.name, p.x, p.y - 35)
+            
+            ctx.font = "bold 10px Segoe UI"; 
+            ctx.fillStyle = p.titleColor || "#aaa";
+            ctx.fillText(p.title, p.x, p.y - 22)
+        }
     })
 }
 
 function drawBall() {
-    // INTERPOLACIÓN: Suaviza el movimiento del balón
-    ball.x += (targetBall.x - ball.x) * 0.25;
-    ball.y += (targetBall.y - ball.y) * 0.25;
+    ball.x += (targetBall.x - ball.x) * 0.3;
+    ball.y += (targetBall.y - ball.y) * 0.3;
 
     ctx.beginPath(); 
     ctx.fillStyle = "white"; 
@@ -101,35 +134,37 @@ function drawBoostUI() {
     const myPlayer = players.find(p => p.id === socket.id);
     if (!myPlayer || myPlayer.boost === undefined) return;
 
-    const x = 1320; // Posición abajo a la derecha para 1400x900
-    const y = 820;
-    const radius = 50;
+    const x = 1300; 
+    const y = 800;
+    const radius = 60;
 
-    // Fondo del medidor
+    // Fondo gris del círculo
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
-    ctx.lineWidth = 10;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.lineWidth = 12;
     ctx.stroke();
 
-    // Barra de boost
+    // Progreso del Boost
     const boostPerc = myPlayer.boost / 100;
     ctx.beginPath();
     ctx.arc(x, y, radius, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * boostPerc));
-    ctx.strokeStyle = myPlayer.boost > 20 ? "#ffae00" : "#ff3b3b";
-    ctx.lineWidth = 10;
+    ctx.strokeStyle = myPlayer.boost > 25 ? "#ffae00" : "#ff3b3b";
+    ctx.lineWidth = 12;
+    ctx.lineCap = "round";
     ctx.stroke();
 
-    // Texto
+    // Número central
     ctx.fillStyle = "white";
-    ctx.font = "bold 24px Segoe UI";
+    ctx.font = "bold 28px Segoe UI";
+    ctx.textAlign = "center";
     ctx.fillText(Math.floor(myPlayer.boost), x, y + 10);
 }
 
 function draw() {
     ctx.clearRect(0, 0, 1400, 900)
     
-    // Dibujamos la cancha
+    // Fondo de cancha
     if (fieldImg.complete) {
         ctx.drawImage(fieldImg, 0, 0, 1400, 900);
     } else {
@@ -137,19 +172,17 @@ function draw() {
         ctx.fillRect(0, 0, 1400, 900);
     }
 
+    drawBoostPads();
     drawPlayers(); 
     drawBall();
-    drawBoostUI(); // Dibujamos el medidor estilo RL
+    drawBoostUI();
     requestAnimationFrame(draw)
 }
 
+// Envío de inputs al servidor
 setInterval(() => {
-    // Enviamos el estado de las teclas, incluyendo shift
     socket.emit("move", { 
-        w: keys["w"], 
-        a: keys["a"], 
-        s: keys["s"], 
-        d: keys["d"], 
+        w: keys["w"], a: keys["a"], s: keys["s"], d: keys["d"], 
         shift: keys["shift"] 
     })
 }, 1000 / 60)
