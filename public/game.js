@@ -2,7 +2,6 @@ const socket = io()
 const canvas = document.getElementById("game")
 const ctx = canvas.getContext("2d")
 
-// Configuración de la imagen de la cancha
 const fieldImg = new Image();
 fieldImg.src = "assets/field.png"; 
 
@@ -12,7 +11,7 @@ let targetBall = { x: 700, y: 450 }
 let boostPads = [] 
 let keys = {}
 
-// --- SOPORTE MÓVIL (Joystick) ---
+// SOPORTE MÓVIL
 let joystick = { active: false, x: 0, y: 0, startX: 0, startY: 0 };
 let touchInput = { w: false, s: false, a: false, d: false, shift: false };
 
@@ -22,7 +21,6 @@ const playerData = JSON.parse(localStorage.getItem("playerData"))
 
 socket.emit("joinGame", { room: room, ...playerData })
 
-// Controles de Teclado
 document.addEventListener("keydown", (e) => {
     const key = e.key === "Shift" ? "shift" : e.key.toLowerCase();
     keys[key] = true;
@@ -32,15 +30,14 @@ document.addEventListener("keyup", (e) => {
     keys[key] = false;
 });
 
-// Controles Táctiles (Joystick Virtual)
+// Touch Events
 canvas.addEventListener("touchstart", (e) => {
     const touch = e.touches[0];
     const rect = canvas.getBoundingClientRect();
     joystick.active = true;
     joystick.startX = (touch.clientX - rect.left) * (canvas.width / rect.width);
     joystick.startY = (touch.clientY - rect.top) * (canvas.height / rect.height);
-    joystick.x = joystick.startX;
-    joystick.y = joystick.startY;
+    joystick.x = joystick.startX; joystick.y = joystick.startY;
 });
 
 canvas.addEventListener("touchmove", (e) => {
@@ -49,16 +46,11 @@ canvas.addEventListener("touchmove", (e) => {
     const rect = canvas.getBoundingClientRect();
     joystick.x = (touch.clientX - rect.left) * (canvas.width / rect.width);
     joystick.y = (touch.clientY - rect.top) * (canvas.height / rect.height);
-
-    // Calcular dirección
     const dx = joystick.x - joystick.startX;
     const dy = joystick.y - joystick.startY;
-    
-    touchInput.a = dx < -20;
-    touchInput.d = dx > 20;
-    touchInput.w = dy < -20;
-    touchInput.s = dy > 20;
-    touchInput.shift = Math.abs(dx) > 60 || Math.abs(dy) > 60; // Shift si estira mucho el joystick
+    touchInput.a = dx < -20; touchInput.d = dx > 20;
+    touchInput.w = dy < -20; touchInput.s = dy > 20;
+    touchInput.shift = Math.abs(dx) > 60 || Math.abs(dy) > 60;
 });
 
 canvas.addEventListener("touchend", () => {
@@ -87,23 +79,29 @@ socket.on("playerInfoUpdate", (fullPlayerData) => {
 
 function drawPlayers() {
     players.forEach(p => {
-        if (p.x === undefined || isNaN(p.x)) p.x = p.targetX || 700;
-        if (p.y === undefined || isNaN(p.y)) p.y = p.targetY || 450;
+        if (p.x === undefined || isNaN(p.x)) { p.x = p.targetX || 700; p.y = p.targetY || 450; }
 
         if (p.id === socket.id) {
-            // Predicción Local Calibrada
-            let speed = (keys['shift'] || touchInput.shift) && p.boost > 0 ? 8 : 5; 
+            // Predicción local más conservadora para evitar el 'disparo'
+            // Reducimos un poco la velocidad visual para que el servidor la alcance rápido
+            let speed = (keys['shift'] || touchInput.shift) && p.boost > 0 ? 7.5 : 4.5; 
             if (keys['w'] || touchInput.w) p.y -= speed;
             if (keys['s'] || touchInput.s) p.y += speed;
             if (keys['a'] || touchInput.a) p.x -= speed;
             if (keys['d'] || touchInput.d) p.x += speed;
 
-            // Suavizado de corrección (0.15 para evitar el 'snapback' brusco)
-            p.x += (p.targetX - p.x) * 0.15;
-            p.y += (p.targetY - p.y) * 0.15;
+            // RECONCILIACIÓN FUERTE: Si la diferencia es mucha, saltamos a la posición real
+            let dist = Math.hypot(p.x - p.targetX, p.y - p.targetY);
+            if (dist > 50) {
+                p.x = p.targetX; p.y = p.targetY;
+            } else {
+                p.x += (p.targetX - p.x) * 0.2; // Suavizado de corrección
+                p.y += (p.targetY - p.y) * 0.2;
+            }
         } else {
-            p.x += (p.targetX - p.x) * 0.6;
-            p.y += (p.targetY - p.y) * 0.6;
+            // Jugadores remotos: Interpolación normal
+            p.x += (p.targetX - p.x) * 0.4;
+            p.y += (p.targetY - p.y) * 0.4;
         }
 
         ctx.beginPath();
@@ -111,30 +109,22 @@ function drawPlayers() {
         ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke();
-
-        ctx.textAlign = "center"; ctx.fillStyle = "white";
-        ctx.font = "bold 14px Segoe UI";
+        ctx.textAlign = "center"; ctx.fillStyle = "white"; ctx.font = "bold 14px Segoe UI";
         ctx.fillText(p.name, p.x, p.y - 35);
     });
 }
 
-function drawJoystick() {
-    if (!joystick.active) return;
-    ctx.beginPath();
-    ctx.arc(joystick.startX, joystick.startY, 50, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(joystick.x, joystick.y, 25, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-    ctx.fill();
-}
-
 function drawBall() {
-    ball.x += (targetBall.x - ball.x) * 0.6;
-    ball.y += (targetBall.y - ball.y) * 0.6;
+    // Si el balón está lejos, suavizamos. Si está cerca, somos más reactivos
+    let distToMe = 1000;
+    const myPlayer = players.find(p => p.id === socket.id);
+    if(myPlayer) distToMe = Math.hypot(ball.x - myPlayer.x, ball.y - myPlayer.y);
+
+    // Ajuste dinámico de suavizado: más rápido si está cerca del jugador
+    let lerpFactor = distToMe < 60 ? 0.8 : 0.4; 
+    ball.x += (targetBall.x - ball.x) * lerpFactor;
+    ball.y += (targetBall.y - ball.y) * lerpFactor;
+
     ctx.beginPath();
     ctx.fillStyle = "white";
     ctx.arc(ball.x, ball.y, 10, 0, Math.PI * 2);
@@ -163,16 +153,20 @@ function draw() {
     if (fieldImg.complete) ctx.drawImage(fieldImg, 0, 0, 1400, 900);
     else { ctx.fillStyle = "#1b7a2f"; ctx.fillRect(0, 0, 1400, 900); }
     
-    // Dibujar Pads
     boostPads.forEach(pad => {
         ctx.beginPath(); ctx.fillStyle = "rgba(255, 215, 0, 0.3)";
-        ctx.arc(pad.x, pad.y, 20, 0, Math.PI * 2); ctx.fill();
+        ctx.arc(pad.x, pad.y, 25, 0, Math.PI * 2); ctx.fill();
     });
 
     drawPlayers();
     drawBall();
     drawBoostUI();
-    drawJoystick();
+    if (joystick.active) {
+        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, 50, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)"; ctx.lineWidth = 3; ctx.stroke();
+        ctx.beginPath(); ctx.arc(joystick.x, joystick.y, 25, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.5)"; ctx.fill();
+    }
     requestAnimationFrame(draw);
 }
 
