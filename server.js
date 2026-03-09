@@ -5,7 +5,8 @@ const io = require("socket.io")(http)
 
 app.use(express.static("public"))
 
-const PORT = 3000
+// CAMBIO CLAVE: Render elige el puerto, si no existe usa el 3000
+const PORT = process.env.PORT || 3000
 http.listen(PORT, () => console.log("Servidor corriendo en puerto", PORT))
 
 let rooms = {}
@@ -133,5 +134,4 @@ setInterval(() => {
             ball: room.ball
         })
     }
-
 }, 1000 / 60)
