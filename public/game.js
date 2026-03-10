@@ -36,7 +36,7 @@ document.addEventListener("keyup", (e) => {
     keys[key] = false;
 });
 
-// Touch Events (Joystick)
+// Touch Events (Joystick mejorado)
 canvas.addEventListener("touchstart", (e) => {
     const touch = e.touches[0];
     const rect = canvas.getBoundingClientRect();
@@ -70,12 +70,12 @@ socket.on("state", (state) => {
         if (localPlayer) {
             localPlayer.targetX = serverPlayer.x;
             localPlayer.targetY = serverPlayer.y;
-            localPlayer.boost = serverPlayer.boost;
+            localPlayer.boost = serverPlayer.boost; // Recibimos boost del servidor
             localPlayer.team = serverPlayer.team;
         }
     });
     targetBall = state.ball;
-    boostPads = state.boostPads || [];
+    boostPads = state.boostPads || []; // Recibimos los pads del servidor
 });
 
 socket.on("playerInfoUpdate", (fullPlayerData) => {
@@ -103,6 +103,7 @@ function drawPlayers() {
             p.x += localVelX;
             p.y += localVelY;
 
+            // Interpolación para corregir desincronización leve
             p.x += (p.targetX - p.x) * 0.15;
             p.y += (p.targetY - p.y) * 0.15;
             
@@ -110,17 +111,29 @@ function drawPlayers() {
                 p.x = p.targetX; p.y = p.targetY;
             }
         } else {
+            // Suavizado para otros jugadores
             p.x += (p.targetX - p.x) * 0.4;
             p.y += (p.targetY - p.y) * 0.4;
         }
 
+        ctx.save();
         ctx.beginPath();
         ctx.fillStyle = p.team === "blue" ? "#00bcff" : "#ff3b3b";
         ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke();
-        ctx.textAlign = "center"; ctx.fillStyle = "white"; ctx.font = "bold 14px Segoe UI";
+        
+        // Renderizado de nombre y título
+        ctx.textAlign = "center";
+        ctx.fillStyle = "white";
+        ctx.font = "bold 14px Segoe UI";
         ctx.fillText(p.name, p.x, p.y - 35);
+        if(p.title) {
+            ctx.fillStyle = p.titleColor || "#aaa";
+            ctx.font = "bold 10px Segoe UI";
+            ctx.fillText(p.title, p.x, p.y - 50);
+        }
+        ctx.restore();
     });
 }
 
@@ -129,6 +142,7 @@ function drawBall() {
     const myPlayer = players.find(p => p.id === socket.id);
     if(myPlayer) distToMe = Math.hypot(ball.x - myPlayer.x, ball.y - myPlayer.y);
 
+    // Si la pelota está cerca, la reacción es más rápida (menos lag visual)
     let lerpFactor = distToMe < 70 ? 0.8 : 0.3; 
     ball.x += (targetBall.x - ball.x) * lerpFactor;
     ball.y += (targetBall.y - ball.y) * lerpFactor;
@@ -142,43 +156,47 @@ function drawBoostUI() {
     const myPlayer = players.find(p => p.id === socket.id);
     if (!myPlayer || myPlayer.boost === undefined) return;
     
-    const x = 1280, y = 780, radius = 70;
+    // Posición dinámica basada en el canvas
+    const x = canvas.width - 110, y = canvas.height - 110, radius = 70;
     const boostPerc = myPlayer.boost / 100;
 
-    // Fondo oscuro (lo que falta)
+    ctx.save();
+    // Sombra/Fondo del medidor
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
     ctx.fill();
 
-    // Arco de Boost Naranja
+    // Aro de progreso (Naranja neón)
     ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.arc(x, y, radius, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * boostPerc));
-    ctx.lineTo(x, y);
-    ctx.fillStyle = "#ff8c00"; 
-    ctx.fill();
-
-    // Brillo exterior
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "#333";
+    ctx.arc(x, y, radius - 5, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Texto del porcentaje
+    ctx.beginPath();
+    ctx.strokeStyle = "#ff8c00";
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#ff8c00";
+    ctx.lineCap = "round";
+    ctx.arc(x, y, radius - 5, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * boostPerc));
+    ctx.stroke();
+
+    // Texto
+    ctx.shadowBlur = 0;
     ctx.fillStyle = "white";
-    ctx.font = "bold 34px Segoe UI";
+    ctx.font = "bold 38px Segoe UI";
     ctx.textAlign = "center";
-    ctx.fillText(Math.floor(myPlayer.boost), x, y + 12);
+    ctx.fillText(Math.floor(myPlayer.boost), x, y + 15);
+    ctx.restore();
 }
 
 function draw() {
-    ctx.clearRect(0, 0, 1400, 900);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (fieldImg.complete) ctx.drawImage(fieldImg, 0, 0, 1400, 900);
     else { ctx.fillStyle = "#0a1a0a"; ctx.fillRect(0, 0, 1400, 900); }
     
-    // Dibujar Boost Pads con estilo Neón
+    // Dibujar Boost Pads
     boostPads.forEach(pad => {
         if (!pad.active) return;
         ctx.save();
