@@ -142,19 +142,16 @@ function drawBoostUI() {
     const myPlayer = players.find(p => p.id === socket.id);
     if (!myPlayer || myPlayer.boost === undefined) return;
     
-    const x = 1300, y = 800, radius = 65;
-    
-    // Fondo negro (lo que se va perdiendo)
+    const x = 1280, y = 780, radius = 70;
+    const boostPerc = myPlayer.boost / 100;
+
+    // Fondo oscuro (lo que falta)
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = "black";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
     ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
 
-    // Círculo Naranja (cantidad de boost)
-    const boostPerc = myPlayer.boost / 100;
+    // Arco de Boost Naranja
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.arc(x, y, radius, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * boostPerc));
@@ -162,9 +159,16 @@ function drawBoostUI() {
     ctx.fillStyle = "#ff8c00"; 
     ctx.fill();
 
-    // Texto central
+    // Brillo exterior
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Texto del porcentaje
     ctx.fillStyle = "white";
-    ctx.font = "bold 32px Segoe UI";
+    ctx.font = "bold 34px Segoe UI";
     ctx.textAlign = "center";
     ctx.fillText(Math.floor(myPlayer.boost), x, y + 12);
 }
@@ -172,21 +176,25 @@ function drawBoostUI() {
 function draw() {
     ctx.clearRect(0, 0, 1400, 900);
     if (fieldImg.complete) ctx.drawImage(fieldImg, 0, 0, 1400, 900);
-    else { ctx.fillStyle = "#1b7a2f"; ctx.fillRect(0, 0, 1400, 900); }
+    else { ctx.fillStyle = "#0a1a0a"; ctx.fillRect(0, 0, 1400, 900); }
     
-    // Dibujar Boost Pads
+    // Dibujar Boost Pads con estilo Neón
     boostPads.forEach(pad => {
         if (!pad.active) return;
+        ctx.save();
         ctx.beginPath();
-        // Naranja brillante para los de 100 (big), amarillo suave para los de 12 (small)
-        ctx.fillStyle = pad.type === 'big' ? "rgba(255, 140, 0, 0.6)" : "rgba(255, 255, 0, 0.3)";
-        ctx.arc(pad.x, pad.y, pad.type === 'big' ? 30 : 15, 0, Math.PI * 2);
-        ctx.fill();
-        if(pad.type === 'big') {
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
-            ctx.lineWidth = 2;
-            ctx.stroke();
+        ctx.shadowBlur = 15;
+        if (pad.type === 'big') {
+            ctx.shadowColor = "#ff8c00";
+            ctx.fillStyle = "rgba(255, 140, 0, 0.8)";
+            ctx.arc(pad.x, pad.y, 25, 0, Math.PI * 2);
+        } else {
+            ctx.shadowColor = "#00ffcc";
+            ctx.fillStyle = "rgba(0, 255, 204, 0.5)";
+            ctx.arc(pad.x, pad.y, 12, 0, Math.PI * 2);
         }
+        ctx.fill();
+        ctx.restore();
     });
 
     drawPlayers();
