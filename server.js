@@ -36,13 +36,21 @@ io.on("connection", (socket) => {
         const r = data.room; if (!rooms[r]) return;
         socket.join(r);
         const team = data.team || "red";
-        rooms[r].players.push({
+        
+        const newPlayer = {
             id: socket.id, name: data.name, title: data.title, titleColor: data.titleColor,
             pfp: data.pfp, banner: data.banner, team: team,
             x: team === "red" ? 300 : 1100, y: 450, vx: 0, vy: 0,
             boost: 33, input: {}
-        });
-        io.to(r).emit("playerInfoUpdate", rooms[r].players);
+        };
+        
+        rooms[r].players.push(newPlayer);
+        
+        // Enviamos la info pesada (nombres, pfp) SOLO cuando alguien entra
+        io.to(r).emit("playerInfoUpdate", rooms[r].players.map(p => ({
+            id: p.id, name: p.name, title: p.title, titleColor: p.titleColor,
+            pfp: p.pfp, banner: p.banner, team: p.team
+        })));
     });
 
     socket.on("move", (input) => {
@@ -63,10 +71,9 @@ io.on("connection", (socket) => {
 setInterval(() => {
     for (const code in rooms) {
         const room = rooms[code];
-        // --- CALIBRACIÓN DE FÍSICA LENTA ---
         const friction = 0.96;
-        const baseAcc = 0.18;   // Muy suave
-        const boostAcc = 0.4;    // Boost controlado
+        const baseAcc = 0.18;   
+        const boostAcc = 0.4;    
         const maxSpeedNormal = 4.5;
         const maxSpeedBoost = 8;
 
@@ -113,14 +120,19 @@ setInterval(() => {
             }
         });
 
+        // --- OPTIMIZACIÓN: Solo enviamos datos que cambian constantemente ---
         io.to(code).emit("state", {
             players: room.players.map(p => ({
-                id: p.id, x: p.x, y: p.y, team: p.team,
-                name: p.name, title: p.title, titleColor: p.titleColor, 
-                boost: p.boost, banner: p.banner
+                id: p.id, 
+                x: Math.round(p.x * 10) / 10, // Redondeamos para ahorrar caracteres
+                y: Math.round(p.y * 10) / 10, 
+                boost: Math.floor(p.boost)
             })),
-            ball: room.ball,
-            boostPads: room.boostPads
+            ball: { 
+                x: Math.round(room.ball.x * 10) / 10, 
+                y: Math.round(room.ball.y * 10) / 10 
+            },
+            boostPads: room.boostPads.map(pad => ({ active: pad.active })) // El cliente ya conoce las posiciones de los pads
         });
     }
 }, 1000 / 60);

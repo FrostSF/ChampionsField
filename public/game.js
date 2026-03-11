@@ -29,7 +29,7 @@ document.addEventListener("keyup", (e) => {
     keys[key] = false;
 });
 
-// Touch Events (Simplificados)
+// TOUCH EVENTS
 canvas.addEventListener("touchstart", (e) => {
     const touch = e.touches[0];
     const rect = canvas.getBoundingClientRect();
@@ -54,14 +54,24 @@ canvas.addEventListener("touchend", () => {
     touchInput = { w: false, s: false, a: false, d: false, shift: false };
 });
 
+// --- OPTIMIZACIÓN DE RECEPCIÓN ---
 socket.on("state", (state) => {
-    // Solo actualizamos posiciones desde el servidor
-    players = state.players;
+    // Solo actualizamos las variables físicas de los jugadores existentes
+    state.players.forEach(sp => {
+        let lp = players.find(p => p.id === sp.id);
+        if (lp) {
+            lp.x = sp.x;
+            lp.y = sp.y;
+            lp.boost = sp.boost;
+        }
+    });
     ball = state.ball;
     boostPads = state.boostPads || [];
 });
 
 socket.on("playerInfoUpdate", (fullPlayerData) => {
+    // Aquí es donde SÍ recibimos PFPs y Banners, pero solo cuando alguien entra/sale
+    players = fullPlayerData;
     updateSidePanels(fullPlayerData);
 });
 
@@ -151,12 +161,13 @@ function updateSidePanels(pList) {
     });
 }
 
+// REDUCIMOS FRECUENCIA DE ENVÍO PARA EVITAR LAG DE SUBIDA
 setInterval(() => {
     socket.emit("move", { 
         w: keys["w"] || touchInput.w, a: keys["a"] || touchInput.a, 
         s: keys["s"] || touchInput.s, d: keys["d"] || touchInput.d, 
         shift: keys["shift"] || touchInput.shift 
     });
-}, 1000 / 60);
+}, 1000 / 45); 
 
 draw();
