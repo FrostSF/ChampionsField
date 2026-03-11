@@ -58,10 +58,10 @@ io.on("connection", (socket) => {
             title: data.title,
             titleColor: data.titleColor || "#aaa",
             pfp: data.pfp,
-            banner: data.banner || "default.png",
+            // CORRECCIÓN: Asegurar que el banner tenga la ruta correcta si no viene con ella
+            banner: data.banner ? (data.banner.includes('/') ? data.banner : 'assets/banners/' + data.banner) : 'assets/banners/default.png',
             team: team,
-            x: spawnX,
-            y: 450,
+            x: spawnX, y: 450,
             vx: 0, vy: 0,
             boost: 33,
             input: {}
@@ -91,16 +91,16 @@ setInterval(() => {
 
         room.players.forEach(p => {
             let isBoosting = p.input.shift && p.boost > 0;
-            // VELOCIDADES: El boost ahora es el estándar rápido
-            const accel = isBoosting ? 1.4 : 0.25; 
-            const limit = isBoosting ? 9.5 : 3.2;
+            // VELOCIDADES: Normal 0.5 -> Boost 1.75 (3.5x más aceleración)
+            const accel = isBoosting ? 1.75 : 0.5; 
+            const limit = isBoosting ? 10.5 : 5.2;
 
             if (p.input.w) p.vy -= accel;
             if (p.input.s) p.vy += accel;
             if (p.input.a) p.vx -= accel;
             if (p.input.d) p.vx += accel;
 
-            if (isBoosting) p.boost -= 0.4;
+            if (isBoosting) p.boost -= 0.45;
 
             p.vx *= friction; p.vy *= friction;
             
@@ -130,7 +130,7 @@ setInterval(() => {
             }
         });
 
-        // Pelota
+        // Pelota y colisiones
         room.ball.x += room.ball.vx; room.ball.y += room.ball.vy;
         room.ball.vx *= 0.985; room.ball.vy *= 0.985;
         if (room.ball.x < 10 || room.ball.x > 1390) room.ball.vx *= -1.1;
@@ -141,14 +141,15 @@ setInterval(() => {
             let dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < 28) {
                 let nx = dx / dist, ny = dy / dist;
-                room.ball.vx += nx * 0.8; room.ball.vy += ny * 0.8;
+                room.ball.vx += nx * 0.9; room.ball.vy += ny * 0.9;
             }
         });
 
         io.to(code).emit("state", {
             players: room.players.map(p => ({
                 id: p.id, x: p.x, y: p.y, team: p.team,
-                name: p.name, title: p.title, titleColor: p.titleColor, boost: p.boost
+                name: p.name, title: p.title, titleColor: p.titleColor, 
+                boost: p.boost, banner: p.banner
             })),
             ball: room.ball,
             boostPads: room.boostPads
