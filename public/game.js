@@ -14,11 +14,11 @@ let keys = {}
 // --- FÍSICA CALIBRADA (Sincronizada con Server) ---
 let localVelX = 0;
 let localVelY = 0;
-const friction = 0.95;  // Más agarre
-const baseAcc = 0.2;    // Aceleración suave
-const boostAcc = 0.45;  // Boost controlado
+const friction = 0.96;  
+const baseAcc = 0.2;   
+const boostAcc = 0.45;  
 const maxSpeedNormal = 5;
-const maxSpeedBoost = 9;
+const maxSpeedBoost = 8.5;
 
 // SOPORTE MÓVIL
 let joystick = { active: false, x: 0, y: 0, startX: 0, startY: 0 };
@@ -92,7 +92,7 @@ function drawPlayers() {
         if (p.x === undefined || isNaN(p.x)) { p.x = p.targetX || 700; p.y = p.targetY || 450; }
 
         if (p.id === socket.id) {
-            let moveX = 0; let moveY = 0;
+            let moveX = 0, moveY = 0;
             if (keys['w'] || touchInput.w) moveY -= 1;
             if (keys['s'] || touchInput.s) moveY += 1;
             if (keys['a'] || touchInput.a) moveX -= 1;
@@ -119,8 +119,8 @@ function drawPlayers() {
             // Reconciliación ultra suave
             let dist = Math.hypot(p.x - p.targetX, p.y - p.targetY);
             if (dist > 0.1) {
-                p.x += (p.targetX - p.x) * 0.04; 
-                p.y += (p.targetY - p.y) * 0.04;
+                p.x += (p.targetX - p.x) * 0.05; 
+                p.y += (p.targetY - p.y) * 0.05;
             }
             if (dist > 80) { p.x = p.targetX; p.y = p.targetY; }
         } else {
@@ -149,8 +149,8 @@ function drawPlayers() {
 }
 
 function drawBall() {
-    ball.x += (targetBall.x - ball.x) * 0.15;
-    ball.y += (targetBall.y - ball.y) * 0.15;
+    ball.x += (targetBall.x - ball.x) * 0.2;
+    ball.y += (targetBall.y - ball.y) * 0.2;
     ctx.beginPath(); ctx.fillStyle = "white";
     ctx.arc(ball.x, ball.y, 10, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = "black"; ctx.stroke();
@@ -185,28 +185,16 @@ function drawBoostUI() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (fieldImg.complete) ctx.drawImage(fieldImg, 0, 0, 1400, 900);
-    else { ctx.fillStyle = "#0a1a0a"; ctx.fillRect(0, 0, 1400, 900); }
-    
     boostPads.forEach(pad => {
         if (!pad.active) return;
-        ctx.save();
         ctx.beginPath();
         ctx.fillStyle = pad.type === 'big' ? "rgba(255, 140, 0, 0.8)" : "rgba(255, 204, 0, 0.7)";
         ctx.arc(pad.x, pad.y, pad.type === 'big' ? 18 : 8, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
     });
-
     drawPlayers();
     drawBall();
     drawBoostUI();
-    
-    if (joystick.active) {
-        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, 50, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)"; ctx.lineWidth = 3; ctx.stroke();
-        ctx.beginPath(); ctx.arc(joystick.x, joystick.y, 25, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255, 255, 255, 0.5)"; ctx.fill();
-    }
     requestAnimationFrame(draw);
 }
 
