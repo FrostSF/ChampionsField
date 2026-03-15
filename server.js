@@ -41,14 +41,16 @@ function spawnPos(team,idx,total){
     return {x,y:H/2-span/2+idx*step}
 }
 function makePlayer(id,d){
+    const team=d.team||"blue"
     return {
-        id, team:d.team||"blue",
+        id, team,
         name:d.name||"Jugador", title:d.title||"ROOKIE",
         titleColor:d.titleColor||"#aaa",
         pfp:d.pfp||"assets/default_pfp.png",
         banner:d.banner||"assets/banners/Default.png",
         decal:d.decal||null, boostTrail:d.boostTrail||null,
-        x:W/2,y:H/2,vx:0,vy:0,
+        x:team==="blue"?WALL_L+160:WALL_R-160, y:H/2,
+        vx:0,vy:0,
         boost:33,dashing:false,dashTimer:0,dashCd:0,dashVx:0,dashVy:0,
         input:{},lastSeq:0
     }

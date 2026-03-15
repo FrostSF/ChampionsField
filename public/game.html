@@ -70,9 +70,8 @@ html,body{width:100%;height:100%;background:#050810;overflow:hidden;font-family:
 .name{position:relative;z-index:2;font-weight:800;font-size:12px;color:#fff;text-transform:uppercase;}
 .playerTitle{position:relative;z-index:2;font-size:8px;font-weight:700;text-transform:uppercase;margin-top:1px;letter-spacing:1px;}
 
-/* ── MOBILE CONTROLS — touch only ── */
+/* ── MOBILE CONTROLS — shown via JS on real touch devices only ── */
 #mobileControls{display:none;position:absolute;bottom:0;left:0;right:0;height:200px;pointer-events:none;z-index:40;}
-@media(pointer:coarse){#mobileControls{display:block;}#ctrlHint{display:none;}#boost-wrap{bottom:210px;}}
 #joystickZone{position:absolute;left:20px;bottom:20px;width:160px;height:160px;pointer-events:all;}
 #joystickBase{position:absolute;inset:0;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.2);}
 #joystickKnob{position:absolute;width:64px;height:64px;left:48px;top:48px;border-radius:50%;background:rgba(255,255,255,0.35);border:2px solid rgba(255,255,255,0.6);transition:none;}
@@ -205,59 +204,71 @@ html,body{width:100%;height:100%;background:#050810;overflow:hidden;font-family:
     window._sfx = { play:playSound, updateCrowd }
 
     // ══ MOBILE JOYSTICK ═══════════════════════════════════════
+    // Show mobile controls ONLY on real touch devices (not desktop touchscreens)
+    // navigator.maxTouchPoints>1 AND no fine pointer = real mobile/tablet
+    const isTouchDevice = (navigator.maxTouchPoints > 1) && window.matchMedia("(pointer:coarse)").matches
+    if(isTouchDevice){
+        const mc=document.getElementById("mobileControls")
+        if(mc) mc.style.display="block"
+        const bw=document.getElementById("boost-wrap")
+        if(bw) bw.style.bottom="210px"
+        const ch=document.getElementById("ctrlHint")
+        if(ch) ch.style.display="none"
+    }
+
+    // Mobile joystick — guarded so null elements never crash the IIFE
+    const mobileState = { x:0, y:0, boost:false, dash:false }
     const jZone = document.getElementById("joystickZone")
     const jKnob = document.getElementById("joystickKnob")
     const btnBoost = document.getElementById("btnBoost")
     const btnDash  = document.getElementById("btnDash")
-    const mobileState = { x:0, y:0, boost:false, dash:false }
-    const JR = 80  // zone radius
-    const KR = 32  // knob radius
+    const JR=80, KR=32
 
-    function joystickMove(e){
-        e.preventDefault()
-        const t=e.touches?e.touches[0]:e
-        const rect=jZone.getBoundingClientRect()
-        const cx=rect.left+rect.width/2, cy=rect.top+rect.height/2
-        let dx=t.clientX-cx, dy=t.clientY-cy
-        const dist=Math.hypot(dx,dy)
-        if(dist>JR){dx=dx/dist*JR;dy=dy/dist*JR}
-        jKnob.style.left=(JR-KR+dx)+"px"
-        jKnob.style.top =(JR-KR+dy)+"px"
-        mobileState.x=dx/JR; mobileState.y=dy/JR
-    }
-    function joystickEnd(e){
-        e.preventDefault()
-        jKnob.style.left=(JR-KR)+"px"; jKnob.style.top=(JR-KR)+"px"
-        mobileState.x=0; mobileState.y=0
-    }
-    jZone.addEventListener("touchstart",joystickMove,{passive:false})
-    jZone.addEventListener("touchmove", joystickMove,{passive:false})
-    jZone.addEventListener("touchend",  joystickEnd, {passive:false})
-
-    function btnPress(btn,key,e){ e.preventDefault(); mobileState[key]=true; btn.classList.add("active") }
-    function btnRelease(btn,key,e){ e.preventDefault(); mobileState[key]=false; btn.classList.remove("active")
-        // dash is a one-shot trigger — reset after 1 frame
-        if(key==="dash") setTimeout(()=>mobileState.dash=false,50)
-    }
-    btnBoost.addEventListener("touchstart",e=>btnPress(btnBoost,"boost",e),{passive:false})
-    btnBoost.addEventListener("touchend",  e=>btnRelease(btnBoost,"boost",e),{passive:false})
-    btnDash.addEventListener("touchstart", e=>btnPress(btnDash,"dash",e),{passive:false})
-    btnDash.addEventListener("touchend",   e=>btnRelease(btnDash,"dash",e),{passive:false})
-
-    // Patch getInput to include mobile
-    const _origGetInput = window.getInput
-    window.getInput = function(){
-        const kb = _origGetInput ? _origGetInput() : {w:false,a:false,s:false,d:false,shift:false,dash:false}
-        const mx=mobileState.x, my=mobileState.y
-        return {
-            w: kb.w || my < -0.3,
-            s: kb.s || my >  0.3,
-            a: kb.a || mx < -0.3,
-            d: kb.d || mx >  0.3,
-            shift: kb.shift || mobileState.boost,
-            dash:  kb.dash  || mobileState.dash
+    if(jZone && jKnob){
+        function joystickMove(e){
+            e.preventDefault()
+            const t=e.touches?e.touches[0]:e
+            const rect=jZone.getBoundingClientRect()
+            const cx=rect.left+rect.width/2, cy=rect.top+rect.height/2
+            let dx=t.clientX-cx, dy=t.clientY-cy
+            const dist=Math.hypot(dx,dy)
+            if(dist>JR){dx=dx/dist*JR;dy=dy/dist*JR}
+            jKnob.style.left=(JR-KR+dx)+"px"
+            jKnob.style.top =(JR-KR+dy)+"px"
+            mobileState.x=dx/JR; mobileState.y=dy/JR
         }
+        function joystickEnd(e){
+            e.preventDefault()
+            jKnob.style.left=(JR-KR)+"px"; jKnob.style.top=(JR-KR)+"px"
+            mobileState.x=0; mobileState.y=0
+        }
+        jZone.addEventListener("touchstart",joystickMove,{passive:false})
+        jZone.addEventListener("touchmove", joystickMove,{passive:false})
+        jZone.addEventListener("touchend",  joystickEnd, {passive:false})
     }
+    if(btnBoost && btnDash){
+        function btnPress(btn,key,e){ e.preventDefault(); mobileState[key]=true; btn.classList.add("active") }
+        function btnRelease(btn,key,e){
+            e.preventDefault(); mobileState[key]=false; btn.classList.remove("active")
+            if(key==="dash") setTimeout(()=>{ mobileState.dash=false },50)
+        }
+        btnBoost.addEventListener("touchstart",e=>btnPress(btnBoost,"boost",e),{passive:false})
+        btnBoost.addEventListener("touchend",  e=>btnRelease(btnBoost,"boost",e),{passive:false})
+        btnDash.addEventListener("touchstart", e=>btnPress(btnDash,"dash",e),{passive:false})
+        btnDash.addEventListener("touchend",   e=>btnRelease(btnDash,"dash",e),{passive:false})
+    }
+
+    // Every 16ms, inject mobile joystick state into game.js's keys object
+    setInterval(()=>{
+        if(typeof keys==="undefined") return
+        const mx=mobileState.x, my=mobileState.y
+        if(my < -0.3) keys.w=true
+        if(my >  0.3) keys.s=true
+        if(mx < -0.3) keys.a=true
+        if(mx >  0.3) keys.d=true
+        if(mobileState.boost) keys.shift=true
+        if(mobileState.dash)  keys.dash=true
+    }, 16)
 
     // ══ FREE PLAY ═════════════════════════════════════════════
     if(freePlay){
@@ -402,20 +413,18 @@ html,body{width:100%;height:100%;background:#050810;overflow:hidden;font-family:
         }
     }
 
-    // Dash sound — detected in render loop via dashing state change
-    let _prevDashing=false
-    const origLoop=requestAnimationFrame
-    // We hook into spawnDashParticles which fires on dash start
-    const _origSpawnDash=spawnDashParticles
-    spawnDashParticles=function(x,y){_origSpawnDash(x,y);playSound("dash",0.5)}
+    // Dash sound is triggered by checking local.dashing state change in setInterval below
 
-    let seq=0
+    let seq=0, _prevDashLocal=false
     const inputBuf=[]
     setInterval(()=>{
         const inp=getInput(); seq++
         inputBuf.push({seq,inp,dt:1/60})
         if(inputBuf.length>120)inputBuf.shift()
         socket.emit("input",{seq,input:inp})
+        // Dash sound via local state
+        if(local.dashing&&!_prevDashLocal) playSound("dash",0.5)
+        _prevDashLocal=local.dashing
     },1000/60)
     window._inputBuf=inputBuf
 
