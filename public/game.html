@@ -196,17 +196,18 @@ html,body{width:100%;height:100%;background:#050810;overflow:hidden;font-family:
     window._sfx = { play:playSound, updateCrowd }
 
     // ══ MOBILE JOYSTICK ═══════════════════════════════════════
-    // Show mobile controls ONLY on real touch devices (not desktop touchscreens)
-    // navigator.maxTouchPoints>1 AND no fine pointer = real mobile/tablet
-    const isTouchDevice = (navigator.maxTouchPoints > 1) && window.matchMedia("(pointer:coarse)").matches
-    if(isTouchDevice){
-        const mc=document.getElementById("mobileControls")
-        if(mc) mc.style.display="block"
-        const bw=document.getElementById("boost-wrap")
-        if(bw) bw.style.bottom="210px"
-        const ch=document.getElementById("ctrlHint")
-        if(ch) ch.style.display="none"
+    // Show mobile controls on first touch event (works on any device)
+    let mobileShown = false
+    function showMobileControls(){
+        if(mobileShown) return; mobileShown=true
+        const mc=document.getElementById("mobileControls"); if(mc)mc.style.display="block"
+        const bw=document.getElementById("boost-wrap");     if(bw)bw.style.bottom="210px"
+        const ch=document.getElementById("ctrlHint");       if(ch)ch.style.display="none"
     }
+    // Show immediately if device has touch capability
+    if("ontouchstart" in window || navigator.maxTouchPoints>0) showMobileControls()
+    // Also show on first actual touch (catches edge cases)
+    window.addEventListener("touchstart", showMobileControls, {once:true, passive:true})
 
     // Mobile joystick — guarded so null elements never crash the IIFE
     const mobileState = { x:0, y:0, boost:false, dash:false }
@@ -250,21 +251,17 @@ html,body{width:100%;height:100%;background:#050810;overflow:hidden;font-family:
         btnDash.addEventListener("touchend",   e=>btnRelease(btnDash,"dash",e),{passive:false})
     }
 
-    // On touch devices: sync joystick to keys every 16ms
-    if(isTouchDevice){
-        setInterval(()=>{
-            if(typeof keys==="undefined") return
-            const mx=mobileState.x, my=mobileState.y
-            // Only override direction keys, don't touch keyboard keys
-            // Use separate mobile flags that getInput merges
-            keys._mw = my < -0.3
-            keys._ms = my >  0.3
-            keys._ma = mx < -0.3
-            keys._md = mx >  0.3
-            keys._mshift = mobileState.boost
-            keys._mdash  = mobileState.dash
-        }, 16)
-    }
+    // Always run mobile key injection — harmless on desktop (_m* keys ignored if false)
+    setInterval(()=>{
+        if(typeof keys==="undefined") return
+        const mx=mobileState.x, my=mobileState.y
+        keys._mw     = my < -0.3
+        keys._ms     = my >  0.3
+        keys._ma     = mx < -0.3
+        keys._md     = mx >  0.3
+        keys._mshift = !!mobileState.boost
+        keys._mdash  = !!mobileState.dash
+    }, 16)
 
     // ══ FREE PLAY ═════════════════════════════════════════════
     if(freePlay){

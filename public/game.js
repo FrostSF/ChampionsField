@@ -109,46 +109,21 @@ function physicsStep(s,inp,dt){
 }
 
 function reconcile(srv){
-    // Step 1 — fast-forward: start from server state and re-run unacked inputs
-    const predicted = {
-        x:srv.x, y:srv.y, vx:srv.vx||0, vy:srv.vy||0,
-        boost:srv.boost, dashing:srv.dashing||false,
-        dashTimer:srv.dashTimer||0, dashCd:srv.dashCd||0,
-        dashVx:local.dashVx||0, dashVy:local.dashVy||0
-    }
+    // Always snap to authoritative server position, then predict ahead
+    // with unacknowledged inputs. Simple and correct.
+    local.x        = srv.x
+    local.y        = srv.y
+    local.vx       = srv.vx||0
+    local.vy       = srv.vy||0
+    local.boost    = srv.boost
+    local.dashing  = srv.dashing||false
+    local.dashTimer= srv.dashTimer||0
+    local.dashCd   = srv.dashCd||0
+    local.ready    = true
+
+    // Re-simulate inputs the server hasn't acknowledged yet
     const buf = window._inputBuf || []
-    buf.filter(e=>e.seq>(srv.seq||0)).forEach(e=>physicsStep(predicted,e.inp,e.dt))
-
-    // Step 2 — measure position error between where we predicted and where server says
-    const errX = predicted.x - local.x
-    const errY = predicted.y - local.y
-    const err  = Math.hypot(errX, errY)
-
-    if(!local.ready || err > 180){
-        // First packet or very large error — hard snap
-        Object.assign(local, predicted)
-    } else if(err > 2){
-        // Small-medium error — smooth correction over ~6 frames (100ms at 60fps)
-        const alpha = Math.min(1, err / 60) * 0.35
-        local.x  += errX * alpha
-        local.y  += errY * alpha
-        local.vx  = predicted.vx
-        local.vy  = predicted.vy
-        // Always sync these exactly — they don't cause visual jitter
-        local.boost      = predicted.boost
-        local.dashing    = predicted.dashing
-        local.dashTimer  = predicted.dashTimer
-        local.dashCd     = predicted.dashCd
-    } else {
-        // Negligible error — just sync physics state, keep local position
-        local.boost     = predicted.boost
-        local.dashing   = predicted.dashing
-        local.dashTimer = predicted.dashTimer
-        local.dashCd    = predicted.dashCd
-        local.vx        = predicted.vx
-        local.vy        = predicted.vy
-    }
-    local.ready = true
+    buf.filter(e=>e.seq>(srv.seq||0)).forEach(e=>physicsStep(local,e.inp,e.dt))
 }
 
 // ─── STATE CALLBACK — called by host.js OR client.js ─────────────
