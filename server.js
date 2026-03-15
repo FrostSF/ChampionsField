@@ -1,39 +1,33 @@
 // ═══════════════════════════════════════════════════════════════
-//  CHAMPIONS FIELD — Server (socket.io, full physics)
+//  CHAMPIONS FIELD — Server  (socket.io + server-side physics)
 // ═══════════════════════════════════════════════════════════════
 const express = require("express")
 const app  = express()
 const http = require("http").createServer(app)
 const io   = require("socket.io")(http, {
-    cors: { origin: "*" },
-    pingInterval: 10000,
-    pingTimeout:  25000
+    cors:{ origin:"*" }, pingInterval:10000, pingTimeout:25000
 })
-
 app.use(express.static("public"))
 const PORT = process.env.PORT || 3000
-http.listen(PORT, () => console.log("🚀 Champions Field on port", PORT))
+http.listen(PORT, () => console.log("Champions Field :" + PORT))
 
-// ─── ARENA ───────────────────────────────────────────────────────
-const W=1600,H=820
-const WALL_T=55,WALL_B=H-55,WALL_L=55,WALL_R=W-55
+// ─── CONSTANTS ───────────────────────────────────────────────────
+const W=1600,H=820,WALL_T=55,WALL_B=H-55,WALL_L=55,WALL_R=W-55
 const GOAL_W=40,GOAL_H=200,GOAL_CY=H/2
 const GOAL_L={x:WALL_L-GOAL_W,y:GOAL_CY-GOAL_H/2,w:GOAL_W,h:GOAL_H}
-const GOAL_R={x:WALL_R,       y:GOAL_CY-GOAL_H/2,w:GOAL_W,h:GOAL_H}
-const BALL_R=24,CAR_R=22
-const DT=1/60
+const GOAL_R={x:WALL_R,y:GOAL_CY-GOAL_H/2,w:GOAL_W,h:GOAL_H}
+const BALL_R=24,CAR_R=22,DT=1/60
 const ACCEL=900,FRICTION=0.88,MAX_SPD=580
-const BOOST_ACCEL=1400,BOOST_MAX=860,BOOST_DRAIN=38,BOOST_REGEN=0
+const BOOST_ACCEL=1400,BOOST_MAX=860,BOOST_DRAIN=38
 const DASH_SPEED=MAX_SPD*2.0,DASH_DUR=0.18,DASH_CD=1.2
-
-const PADS_TMPL=[
-    {x:180,   y:180,   type:"big",   value:100},{x:W-180, y:180,   type:"big",  value:100},
-    {x:180,   y:H-180, type:"big",   value:100},{x:W-180, y:H-180, type:"big",  value:100},
-    {x:W/2,   y:H/2,   type:"big",   value:100},
-    {x:W/2,   y:160,   type:"small", value:25}, {x:W/2,   y:H-160, type:"small",value:25},
-    {x:160,   y:H/2,   type:"small", value:25}, {x:W-160, y:H/2,   type:"small",value:25},
-    {x:W*.3,  y:H*.3,  type:"small", value:25}, {x:W*.7,  y:H*.3,  type:"small",value:25},
-    {x:W*.3,  y:H*.7,  type:"small", value:25}, {x:W*.7,  y:H*.7,  type:"small",value:25},
+const PADS=[
+    {x:180,y:180,type:"big",value:100},{x:W-180,y:180,type:"big",value:100},
+    {x:180,y:H-180,type:"big",value:100},{x:W-180,y:H-180,type:"big",value:100},
+    {x:W/2,y:H/2,type:"big",value:100},
+    {x:W/2,y:160,type:"small",value:25},{x:W/2,y:H-160,type:"small",value:25},
+    {x:160,y:H/2,type:"small",value:25},{x:W-160,y:H/2,type:"small",value:25},
+    {x:W*.3,y:H*.3,type:"small",value:25},{x:W*.7,y:H*.3,type:"small",value:25},
+    {x:W*.3,y:H*.7,type:"small",value:25},{x:W*.7,y:H*.7,type:"small",value:25},
 ]
 
 const rooms = {}
@@ -46,17 +40,31 @@ function spawnPos(team,idx,total){
     const span=200,step=total>1?span/(total-1):0
     return {x,y:H/2-span/2+idx*step}
 }
-function makePlayer(id,data){
+function makePlayer(id,d){
     return {
-        id,team:data.team||"blue",
-        name:data.name||"Jugador",title:data.title||"ROOKIE",
-        titleColor:data.titleColor||"#aaa",
-        pfp:data.pfp||"assets/default_pfp.png",
-        banner:data.banner||"assets/banners/Default.png",
-        decal:data.decal||null,boostTrail:data.boostTrail||null,
-        x:0,y:0,vx:0,vy:0,
+        id, team:d.team||"blue",
+        name:d.name||"Jugador", title:d.title||"ROOKIE",
+        titleColor:d.titleColor||"#aaa",
+        pfp:d.pfp||"assets/default_pfp.png",
+        banner:d.banner||"assets/banners/Default.png",
+        decal:d.decal||null, boostTrail:d.boostTrail||null,
+        x:W/2,y:H/2,vx:0,vy:0,
         boost:33,dashing:false,dashTimer:0,dashCd:0,dashVx:0,dashVy:0,
         input:{},lastSeq:0
+    }
+}
+function makeRoom(){
+    return {
+        players:[],
+        ball:{x:W/2,y:H/2,vx:0,vy:0,spin:0},
+        pads:PADS.map(p=>({...p,active:true,timer:0})),
+        scores:{blue:0,orange:0}, matchTime:300,
+        phase:"lobby", kickoffTimer:3,
+        settings:{
+            blueTeamName:"BLUE",orangeTeamName:"ORANGE",
+            blueColor:"#00aaff",orangeColor:"#ff6600",
+            seriesTitle:"CHAMPIONS FIELD",gameNum:1,bestOf:7
+        }
     }
 }
 function reposition(room){
@@ -65,51 +73,33 @@ function reposition(room){
     bl.forEach((p,i)=>{const s=spawnPos("blue",i,bl.length);p.x=s.x;p.y=s.y;p.vx=0;p.vy=0})
     or.forEach((p,i)=>{const s=spawnPos("orange",i,or.length);p.x=s.x;p.y=s.y;p.vx=0;p.vy=0})
 }
-function makeRoom(){
-    return {
-        players:[],
-        ball:{x:W/2,y:H/2,vx:0,vy:0,spin:0},
-        pads:PADS_TMPL.map(p=>({...p,active:true,timer:0})),
-        scores:{blue:0,orange:0},matchTime:300,
-        phase:"lobby",kickoffTimer:3,
-        settings:{blueTeamName:"BLUE",orangeTeamName:"ORANGE",
-                  blueColor:"#00aaff",orangeColor:"#ff6600",
-                  seriesTitle:"CHAMPIONS FIELD",gameNum:1,bestOf:7}
-    }
-}
 
 // ─── SOCKETS ─────────────────────────────────────────────────────
 io.on("connection", socket => {
 
-    // createRoom: just makes the room and returns the code.
-    // NO player is added here — the socket from index.html will
-    // disconnect on navigation. Player joins via joinLobby instead.
-    socket.on("createRoom", () => {
-        const code = makeCode()
-        rooms[code] = makeRoom()
-        console.log("Room created:", code)
-        socket.emit("roomCreated", code)
-        // Keep a small TTL: if nobody joins within 30s, clean up
-        setTimeout(() => {
-            if(rooms[code] && rooms[code].players.length === 0) {
-                delete rooms[code]
-                console.log("Room cleaned up (no joins):", code)
-            }
-        }, 30000)
-    })
+    // joinLobby creates the room if it doesn't exist (host) or joins it (client)
+    // No separate createRoom needed — eliminates the socket-disconnect timing bug
+    socket.on("joinLobby", (data) => {
+        const code       = data.room
+        const playerData = { ...data }
+        delete playerData.room
 
-    socket.on("joinLobby", ({ room:code, ...playerData }) => {
+        // Create room on first join
+        if(!rooms[code]) rooms[code] = makeRoom()
         const room = rooms[code]
-        if(!room) return socket.emit("roomError","Sala no encontrada")
+
         socket.join(code)
         socket.roomCode = code
-        // Add player if not already present
+
         if(!room.players.find(p=>p.id===socket.id)){
             room.players.push(makePlayer(socket.id, playerData))
         }
+
         socket.emit("lobbyJoined",{
-            myId:socket.id,players:room.players,
-            settings:room.settings,phase:room.phase
+            myId:socket.id,
+            players:room.players,
+            settings:room.settings,
+            phase:room.phase
         })
         io.to(code).emit("lobbyUpdate",{players:room.players,settings:room.settings})
     })
@@ -149,16 +139,21 @@ io.on("connection", socket => {
         const room=rooms[code]
         room.players=room.players.filter(p=>p.id!==socket.id)
         io.to(code).emit("lobbyUpdate",{players:room.players,settings:room.settings})
-        // Only delete if lobby AND empty (don't delete active games)
-        if(room.players.length===0 && room.phase==="lobby") delete rooms[code]
+        // Clean up empty lobby rooms after a delay (allow reconnects)
+        if(room.players.length===0 && room.phase==="lobby"){
+            setTimeout(()=>{
+                if(rooms[code]&&rooms[code].players.length===0) delete rooms[code]
+            },15000)
+        }
     })
 })
 
 // ─── PHYSICS LOOP ────────────────────────────────────────────────
 setInterval(()=>{
-    const dt=DT
     for(const code in rooms){
         const room=rooms[code]
+        const dt=DT
+
         if(room.phase==="kickoffCountdown"){
             room.kickoffTimer-=dt
             if(room.kickoffTimer<=0){room.phase="playing";room.kickoffTimer=0}
@@ -170,8 +165,8 @@ setInterval(()=>{
             const inp=p.input||{}
             const boosting=!!(inp.shift&&p.boost>0)
             if(boosting)p.boost=Math.max(0,p.boost-BOOST_DRAIN*dt)
-            else p.boost=Math.min(100,p.boost+BOOST_REGEN*dt)
             if(p.dashCd>0)p.dashCd-=dt
+
             if(inp.dash&&!p.dashing&&p.dashCd<=0){
                 let dx=(inp.d?1:0)-(inp.a?1:0),dy=(inp.s?1:0)-(inp.w?1:0)
                 if(Math.hypot(dx,dy)<0.1){dx=p.vx;dy=p.vy}
@@ -187,8 +182,7 @@ setInterval(()=>{
                 if(inp.w)p.vy-=ACCEL*dt;if(inp.s)p.vy+=ACCEL*dt
                 if(inp.a)p.vx-=ACCEL*dt;if(inp.d)p.vx+=ACCEL*dt
                 if(boosting){
-                    const mx=(inp.d?1:0)-(inp.a?1:0),my=(inp.s?1:0)-(inp.w?1:0)
-                    const ml=Math.hypot(mx,my)||1
+                    const mx=(inp.d?1:0)-(inp.a?1:0),my=(inp.s?1:0)-(inp.w?1:0),ml=Math.hypot(mx,my)||1
                     if(ml>0.1){p.vx+=(mx/ml)*BOOST_ACCEL*dt;p.vy+=(my/ml)*BOOST_ACCEL*dt}
                 }
                 p.vx*=Math.pow(FRICTION,dt*60);p.vy*=Math.pow(FRICTION,dt*60)
@@ -212,6 +206,7 @@ setInterval(()=>{
         const b=room.ball
         b.vx*=Math.pow(0.9985,dt*60);b.vy*=Math.pow(0.9985,dt*60)
         b.spin*=Math.pow(0.990,dt*60);b.x+=b.vx*dt;b.y+=b.vy*dt
+
         if(b.x-BALL_R<WALL_L){
             const inG=b.y>GOAL_L.y&&b.y<GOAL_L.y+GOAL_L.h
             if(inG&&b.x+BALL_R<GOAL_L.x){handleGoal(room,code,"orange");continue}
@@ -232,14 +227,17 @@ setInterval(()=>{
                 b.x+=nx*(minD-dist);b.y+=ny*(minD-dist)*0.5
                 const rvx=b.vx-p.vx,rvy=b.vy-p.vy,relV=rvx*nx+rvy*ny
                 if(relV<0){
-                    const cspd=Math.hypot(p.vx,p.vy)
-                    const imp=Math.max(200,-(1.5)*relV+cspd*0.85)
+                    const imp=Math.max(200,-(1.5)*relV+Math.hypot(p.vx,p.vy)*0.85)
                     b.vx+=nx*imp;b.vy+=ny*imp;b.spin+=nx*imp*0.05
                 }
             }
         })
+
         room.matchTime-=dt
-        if(room.matchTime<=0){room.matchTime=0;room.phase="over";io.to(code).emit("gameOver",room.scores)}
+        if(room.matchTime<=0){
+            room.matchTime=0;room.phase="over"
+            io.to(code).emit("gameOver",room.scores)
+        }
         io.to(code).emit("state",buildState(room))
     }
 },1000/60)

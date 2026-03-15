@@ -17,16 +17,15 @@ socket.on("connect", ()=>{
     socket.emit("joinLobby",{room,...pd})
 })
 
-socket.on("lobbyJoined", ({myId:id, players, settings})=>{
+socket.on("lobbyJoined", ({myId:id, players, settings, phase})=>{
     myId = id
-    // First player in list or creator is host — we track by who created
-    // Simple: first person = host (server handles this)
+    // Host = whoever joined first (players[0])
     amHost = (id === players[0]?.id)
     currentPlayers=players; currentSettings=settings
 
-    document.getElementById("startBtn").style.display = amHost?"block":"none"
+    document.getElementById("startBtn").style.display = amHost ? "block" : "none"
     const hostNote = document.getElementById("host-note")
-    if(hostNote) hostNote.style.display = amHost?"none":"block"
+    if(hostNote) hostNote.style.display = amHost ? "none" : "block"
 
     applySettings(settings)
     renderAllPlayers(players)
@@ -34,9 +33,10 @@ socket.on("lobbyJoined", ({myId:id, players, settings})=>{
 
 socket.on("lobbyUpdate", ({players, settings})=>{
     currentPlayers=players; currentSettings=settings
-    // Re-check if we're host (in case of reconnect)
     amHost = (myId === players[0]?.id)
-    document.getElementById("startBtn").style.display = amHost?"block":"none"
+    document.getElementById("startBtn").style.display = amHost ? "block" : "none"
+    const hostNote = document.getElementById("host-note")
+    if(hostNote) hostNote.style.display = amHost ? "none" : "block"
     applySettings(settings)
     renderAllPlayers(players)
 })

@@ -1,4 +1,4 @@
-const socket = io()
+// No socket needed in the menu — room is created on first joinLobby
 
 const SPECIAL_TITLES = {
     "Frost":  { title:"DEVELOPER",   color:"#ff2222" },
@@ -105,13 +105,11 @@ function saveToLocalStorage(team = player.team || "blue"){
 // ─── ROOM ACTIONS ────────────────────────────────────────────────
 function createRoom(){
     saveToLocalStorage()
-    const pd = JSON.parse(localStorage.getItem("playerData") || "{}")
-    socket.emit("createRoom", pd)
-}
-
-socket.on("roomCreated", code => {
+    // Generate code locally — server creates the room on first joinLobby
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    const code  = Array.from({length:5}, () => chars[Math.floor(Math.random()*36)]).join("")
     window.location.href = "lobby.html?room=" + code
-})
+}
 
 function joinRoom(){
     const codeEl = document.getElementById("roomCode")
