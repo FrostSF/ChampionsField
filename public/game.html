@@ -128,103 +128,142 @@ html,body{width:100%;height:100%;background:#050810;overflow:hidden;font-family:
 <script src="game.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  GAME PAGE BOOTSTRAP
-//  JS variables don't survive page navigation, so we re-establish
-//  everything here. The signaling server is already in the room.
+//  GAME BOOTSTRAP — Champions Field
+//  Key insight: JS vars reset on page nav. We redo everything here.
+//  Free Play = no socket, pure local physics.
 // ═══════════════════════════════════════════════════════════════
 (function(){
-    const params     = new URLSearchParams(window.location.search)
-    const roomCode   = params.get("room")
-    const amHostPage = params.get("host") === "1"
-    const playerData = JSON.parse(localStorage.getItem("playerData") || "{}")
-    const savedHostId = localStorage.getItem("hostId") || ""
+    const params      = new URLSearchParams(window.location.search)
+    const roomCode    = params.get("room")
+    const amHostParam = params.get("host") === "1"
+    const freePlay    = params.get("free") === "1"
+    const pd          = JSON.parse(localStorage.getItem("playerData") || "{}")
 
-    const sigSocket = io()
-    _sigSocket = sigSocket
-
-    function show(msg){ document.getElementById("connecting-msg").textContent = msg }
-    function hide(){
+    function showMsg(msg){ document.getElementById("connecting-msg").textContent = msg }
+    function hideOverlay(){
         document.getElementById("connecting").style.display = "none"
         document.getElementById("scoreboard").style.display = "flex"
         document.getElementById("boost-wrap").style.display = "flex"
     }
 
-    // ── WebRTC signaling relay ─────────────────────────────────
-    sigSocket.on("rtc:offer",  ({from,offer})     => { if(!amHostPage) onRtcOffer(from,offer) })
-    sigSocket.on("rtc:answer", ({from,answer})    => { if(amHostPage)  onRtcAnswer(from,answer) })
+    // ══ FREE PLAY — no network, pure local ═══════════════════════
+    if(freePlay){
+        isHost  = true
+        const freeId = "local_" + Date.now()
+        HOST_ID = freeId
+        myId    = freeId
+        hostStartGame(
+            [{ id:freeId, team:pd.team||"blue", name:pd.name||"Jugador",
+               title:pd.title||"", titleColor:pd.titleColor||"#aaa",
+               pfp:pd.pfp||"assets/default_pfp.png",
+               banner:pd.banner||"assets/banners/Default.png",
+               decal:pd.decal||null, boostTrail:pd.boostTrail||null }],
+            { blueTeamName:"FREE PLAY", orangeTeamName:"",
+              blueColor:"#ffffff", orangeColor:"#ffffff",
+              seriesTitle:"FREE PLAY", gameNum:1, bestOf:1 }
+        )
+        onGameInit({ myId:freeId, players:gameState.players, settings:gameState.settings })
+        hideOverlay()
+        return
+    }
+
+    // ══ MULTIPLAYER ══════════════════════════════════════════════
+    const sigSocket = io()
+    _sigSocket = sigSocket
+
+    // Wire WebRTC relay for both host and client
+    sigSocket.on("rtc:offer",  ({from,offer})     => { if(!amHostParam) onRtcOffer(from,offer) })
+    sigSocket.on("rtc:answer", ({from,answer})    => { if(amHostParam)  onRtcAnswer(from,answer) })
     sigSocket.on("rtc:ice",    ({from,candidate}) => onRtcIce(from,candidate))
     sigSocket.on("hostDisconnected", () => onGameEvent({type:"hostDisconnected"}))
+    sigSocket.on("peerJoined",  async ({peerId,playerData:peerPd}) => {
+        if(amHostParam) await onPeerJoined(peerId, peerPd, sigSocket)
+    })
 
-    // ── HOST ──────────────────────────────────────────────────
-    if(amHostPage){
+    // ── HOST ──────────────────────────────────────────────────────
+    if(amHostParam){
         isHost = true
+        showMsg("Iniciando partida...")
 
-        // New peers joining after game started
-        sigSocket.on("peerJoined", async ({peerId, playerData:pd}) => {
-            show("Nuevo jugador conectando...")
-            await onPeerJoined(peerId, pd, sigSocket)
-            // Once DataChannel opens, host.js dc.onopen sends init packet
-        })
-
-        sigSocket.on("lobbyJoined", ({myId}) => {
-            // sigSocket got a new id — update HOST_ID and myId
-            HOST_ID = myId
-            myId    = myId
-
-            const lobbyData = JSON.parse(localStorage.getItem("lobbyData") || "null")
+        sigSocket.on("lobbyJoined", function(data){
+            // CRITICAL: use data.myId, NOT a local var named myId
+            HOST_ID = data.myId
+            myId    = data.myId   // global from game.js
 
             if(!gameState){
-                // First time — start physics
-                const players  = lobbyData ? lobbyData.players  : [{id:HOST_ID,...playerData,team:playerData.team||"blue"}]
-                const settings = lobbyData ? lobbyData.settings : {blueTeamName:"BLUE",orangeTeamName:"ORANGE",blueColor:"#00aaff",orangeColor:"#ff6600",seriesTitle:"CHAMPIONS FIELD",gameNum:1,bestOf:7}
-                hostStartGame(players, settings)
-                // Patch cosmetics on host's own player
-                const me = gameState.players.find(p=>p.id===HOST_ID)
-                if(me) Object.assign(me,{name:playerData.name||me.name,decal:playerData.decal||null,boostTrail:playerData.boostTrail||null})
-                onGameInit({myId:HOST_ID,players:gameState.players,settings:gameState.settings})
+                const lobbyData = JSON.parse(localStorage.getItem("lobbyData")||"null")
+                const players  = (lobbyData && lobbyData.players.length)
+                    ? lobbyData.players
+                    : [{id:HOST_ID, team:pd.team||"blue", name:pd.name||"Jugador",
+                        title:pd.title||"", titleColor:pd.titleColor||"#aaa",
+                        pfp:pd.pfp||"assets/default_pfp.png",
+                        banner:pd.banner||"assets/banners/Default.png",
+                        decal:pd.decal||null, boostTrail:pd.boostTrail||null}]
+                const sett = (lobbyData && lobbyData.settings)
+                    ? lobbyData.settings
+                    : {blueTeamName:"BLUE",orangeTeamName:"ORANGE",
+                       blueColor:"#00aaff",orangeColor:"#ff6600",
+                       seriesTitle:"CHAMPIONS FIELD",gameNum:1,bestOf:7}
+
+                hostStartGame(players, sett)
+
+                // Fix host player id — lobbyData stored old socket id
+                const oldMe = gameState.players.find(p=>p.isHost||p.id===localStorage.getItem("hostId"))
+                if(oldMe) oldMe.id = HOST_ID
+                const newMe = gameState.players.find(p=>p.id===HOST_ID)||gameState.players[0]
+                if(newMe){
+                    newMe.id = HOST_ID
+                    Object.assign(newMe,{name:pd.name||newMe.name,decal:pd.decal||null,boostTrail:pd.boostTrail||null})
+                }
+
+                onGameInit({myId:HOST_ID, players:gameState.players, settings:gameState.settings})
                 sigSocket.emit("gameStarted",{room:roomCode})
                 localStorage.removeItem("lobbyData")
             }
-            hide()
+            hideOverlay()
         })
 
-        sigSocket.on("connect", () => {
-            sigSocket.emit("joinLobby",{room:roomCode,...playerData})
+        sigSocket.on("connect", function(){
+            sigSocket.emit("joinLobby",{room:roomCode,...pd})
         })
+        // In case socket already connected before handler registered
+        if(sigSocket.connected) sigSocket.emit("joinLobby",{room:roomCode,...pd})
     }
 
-    // ── CLIENT ────────────────────────────────────────────────
+    // ── CLIENT ────────────────────────────────────────────────────
     else {
         isHost = false
-        show("Conectando con el host...")
-
-        if(!savedHostId){
+        const hostId = localStorage.getItem("hostId")
+        if(!hostId){
             document.getElementById("connecting-title").textContent="ERROR"
-            show("No se encontró el host. Vuelve al lobby."); return
+            showMsg("Host no encontrado. Vuelve al lobby."); return
         }
 
-        sigSocket.on("lobbyJoined", ({myId: newMyId, hostId, phase}) => {
-            // Wire client WebRTC now that we have our socket id
-            myId = newMyId
-            clientConnect(hostId, sigSocket, newMyId)
-            show("Estableciendo conexión P2P...")
+        let rtcStarted = false
+
+        sigSocket.on("lobbyJoined", function(data){
+            myId = data.myId   // global from game.js
+            if(!rtcStarted){
+                rtcStarted = true
+                clientConnect(data.hostId, sigSocket, data.myId)
+                showMsg("Estableciendo conexión P2P...")
+            }
         })
 
-        sigSocket.on("connect", () => {
-            sigSocket.emit("joinLobby",{room:roomCode,...playerData})
+        sigSocket.on("connect", function(){
+            sigSocket.emit("joinLobby",{room:roomCode,...pd})
         })
+        if(sigSocket.connected) sigSocket.emit("joinLobby",{room:roomCode,...pd})
 
-        // First state packet = we're in
+        // game.js onGameInit and onStateUpdate are already defined globally
+        // Patch them to also hide the overlay on first call
+        const _origInit  = onGameInit
         const _origState = onStateUpdate
-        onStateUpdate = function(data){
-            hide(); onStateUpdate = _origState; _origState(data)
-        }
-        // Init packet sets myId
-        const _origInit = onGameInit
-        onGameInit = function(data){
-            myId = data.myId
-            hide(); onGameInit = _origInit; _origInit(data)
-        }
+        let hidden = false
+        function tryHide(){ if(!hidden){ hidden=true; hideOverlay() } }
+
+        onGameInit   = function(d){ tryHide(); myId=d.myId; _origInit(d) }
+        onStateUpdate= function(d){ tryHide(); _origState(d) }
     }
 })()
 </script>

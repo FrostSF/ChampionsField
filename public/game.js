@@ -119,7 +119,8 @@ function reconcile(srv){
 }
 
 // ─── STATE CALLBACK — called by host.js OR client.js ─────────────
-function onStateUpdate(data){
+// Declared as var so game.html bootstrap can patch them
+var onStateUpdate = function(data){
     const srv=data.players.find(p=>p.id===myId)
     if(srv) reconcile(srv)
 
@@ -139,8 +140,8 @@ function onStateUpdate(data){
     updateHUD()
 }
 
-// Called by host.js when init packet or playerInfoUpdate arrives
-function onGameInit(data){
+// Called by host.js when init packet arrives
+var onGameInit = function(data){
     myId=data.myId
     data.players.forEach(sp=>{
         const p=ensurePlayer(sp.id,sp)
@@ -153,7 +154,7 @@ function onGameInit(data){
 }
 
 // ─── GAME EVENT CALLBACK ─────────────────────────────────────────
-function onGameEvent(evt){
+var onGameEvent = function(evt){
     if(evt.settings)settings=evt.settings
     switch(evt.type){
         case "goal":
@@ -305,8 +306,12 @@ function drawParticles(){
     });ctx.globalAlpha=1;ctx.shadowBlur=0
 }
 
+// Free play flag — set by bootstrap before game starts
+let isFreePlay = (new URLSearchParams(window.location.search)).get("free") === "1"
+
 // ─── ARENA ───────────────────────────────────────────────────────
 function drawArena(){
+    if(isFreePlay){ drawArenaFreePlay(); return }
     ctx.fillStyle="#0e2016";ctx.fillRect(0,0,W,H)
     for(let i=0;i<8;i++){
         const x=WALL_L+(i*(WALL_R-WALL_L)/8),w=(WALL_R-WALL_L)/8
@@ -353,6 +358,33 @@ function drawGoal(g,color,isLeft){
     else       {ctx.moveTo(g.x,g.y);ctx.lineTo(g.x+g.w,g.y);ctx.lineTo(g.x+g.w,g.y+g.h);ctx.lineTo(g.x,g.y+g.h)}
     ctx.stroke();ctx.restore()
 }
+
+function drawArenaFreePlay(){
+    // Clean white/light grey arena — like RL training
+    ctx.fillStyle="#e8e8e8"; ctx.fillRect(0,0,W,H)
+    // Field surface
+    ctx.fillStyle="#f4f4f4"; ctx.fillRect(WALL_L,WALL_T,WALL_R-WALL_L,WALL_B-WALL_T)
+    // Field lines
+    ctx.strokeStyle="rgba(180,180,180,0.8)"; ctx.lineWidth=2
+    ctx.strokeRect(WALL_L,WALL_T,WALL_R-WALL_L,WALL_B-WALL_T)
+    ctx.beginPath();ctx.moveTo(W/2,WALL_T);ctx.lineTo(W/2,WALL_B);ctx.stroke()
+    ctx.beginPath();ctx.arc(W/2,H/2,100,0,Math.PI*2);ctx.stroke()
+    ctx.beginPath();ctx.arc(W/2,H/2,6,0,Math.PI*2);ctx.fillStyle="rgba(180,180,180,0.8)";ctx.fill()
+    ;[[WALL_L+80,H/2],[WALL_R-80,H/2]].forEach(([cx,cy])=>{
+        ctx.beginPath();ctx.arc(cx,cy,90,0,Math.PI*2);ctx.stroke()
+    })
+    // Walls
+    ctx.fillStyle="#d0d0d0"
+    ctx.fillRect(0,0,WALL_L,H);ctx.fillRect(WALL_R,0,W-WALL_R,H)
+    ctx.fillRect(0,0,W,WALL_T);ctx.fillRect(0,WALL_B,W,H-WALL_B)
+    // Wall lines
+    ctx.strokeStyle="rgba(150,150,150,0.5)";ctx.lineWidth=1.5
+    ;[WALL_L,WALL_R].forEach(wx=>{ctx.beginPath();ctx.moveTo(wx,WALL_T);ctx.lineTo(wx,WALL_B);ctx.stroke()})
+    ;[WALL_T,WALL_B].forEach(wy=>{ctx.beginPath();ctx.moveTo(WALL_L,wy);ctx.lineTo(WALL_R,wy);ctx.stroke()})
+    // Goals
+    drawGoal(GOAL_L,"#aaaaaa",true); drawGoal(GOAL_R,"#aaaaaa",false)
+}
+
 function drawBoostPads(){
     boostPads.forEach(pad=>{
         const r=pad.type==="big"?22:12
@@ -381,7 +413,8 @@ function tintCanvas(src,hexColor){
 }
 function drawCar(p,x,y,vx,vy,dashing,isBoosting){
     const isBlue=p.team==="blue"
-    const teamColor=isBlue?(settings.blueColor||"#00aaff"):(settings.orangeColor||"#ff6600")
+    // Free play: white car with grey accent
+    const teamColor = isFreePlay ? "#ffffff" : (isBlue?(settings.blueColor||"#00aaff"):(settings.orangeColor||"#ff6600"))
     const r=CAR_R,spd=Math.hypot(vx,vy),angle=spd>10?Math.atan2(vy,vx):null
     ctx.save();ctx.translate(x,y)
     if(dashing){

@@ -88,6 +88,8 @@ html,body{min-height:100vh;background:#050810;color:#fff;font-family:'Barlow',sa
 
 /* ── PLAY ── */
 .play-btn{width:100%;padding:16px;border:none;border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:4px;text-transform:uppercase;color:#fff;transition:transform .12s,box-shadow .12s;}
+.play-btn.freeplay{background:linear-gradient(135deg,#ffffff22,#ffffff11);border:2px solid rgba(255,255,255,0.3);color:#fff;box-shadow:0 0 20px rgba(255,255,255,0.1);}
+.play-btn.freeplay:hover{transform:scale(1.02);box-shadow:0 0 30px rgba(255,255,255,0.25);border-color:rgba(255,255,255,0.6);}
 .play-btn.create{background:linear-gradient(135deg,#00aaff,#0055cc);box-shadow:0 0 20px rgba(0,170,255,0.35);}
 .play-btn.create:hover{transform:scale(1.02);box-shadow:0 0 35px rgba(0,170,255,0.6);}
 .divider{display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.15);font-size:11px;letter-spacing:2px;}
@@ -166,6 +168,8 @@ html,body{min-height:100vh;background:#050810;color:#fff;font-family:'Barlow',sa
 
   <!-- ══ JUGAR ══ -->
   <div class="panel" id="tab-play">
+    <button class="play-btn freeplay" onclick="startFreePlay()">⚽ FREE PLAY</button>
+    <div class="divider">MULTIJUGADOR</div>
     <button class="play-btn create" onclick="createRoom()">CREAR SALA</button>
     <div class="divider">O</div>
     <div class="join-row">

@@ -120,3 +120,8 @@ function joinRoom(){
     saveToLocalStorage()
     window.location.href = "lobby.html?room=" + code
 }
+
+function startFreePlay(){
+    saveToLocalStorage()
+    window.location.href = "game.html?free=1"
+}
