@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Lobby — Rocket Hax</title>
+<title>Lobby — Champions Field</title>
 <link rel="stylesheet" href="style.css">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;600;700&display=swap');
@@ -109,7 +109,7 @@
 </style>
 </head>
 <body>
-<h1 class="title" style="margin:14px 0 10px;">ROCKET HAX</h1>
+<h1 class="title" style="margin:14px 0 10px;">CHAMPIONS FIELD</h1>
 
 <div class="lobby-root">
 
@@ -199,8 +199,9 @@
       </div>
     </div>
 
-    <button class="start-btn" onclick="startGame()">INICIAR PARTIDA</button>
+    <button class="start-btn" id="startBtn" onclick="startGame()" style="display:none">INICIAR PARTIDA</button>
     <p class="lobby-hint">Haz clic en un equipo para unirte</p>
+    <p id="lobby-error" style="display:none;color:#ff4444;font-size:12px;text-align:center;letter-spacing:1px;padding:4px;"></p>
   </div>
 
   <!-- Orange team panel -->
@@ -215,6 +216,8 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="host.js"></script>
+<script src="client.js"></script>
 <script src="lobby.js"></script>
 </body>
 </html>

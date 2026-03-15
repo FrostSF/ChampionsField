@@ -70,9 +70,11 @@ function updateTitlePreview(){
     renderPreview()
 }
 
-function previewBanner(){
-    player.banner = "assets/banners/" + document.getElementById("banner-select").value
-    renderPreview()
+function previewBanner(file){
+    // accepts filename like "Default.png" or full path
+    if(!file) return
+    player.banner = file.includes("/") ? file : "assets/banners/" + file
+    saveToLocalStorage()
 }
 
 function renderPreview(){

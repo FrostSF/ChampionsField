@@ -2,28 +2,25 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Rocket Hax</title>
-<link rel="stylesheet" href="style.css">
+<title>Champions Field</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;600;700&display=swap');
 
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{min-height:100vh;background:#050810;color:#fff;font-family:'Barlow',sans-serif;display:flex;flex-direction:column;align-items:center;overflow-x:hidden;}
+html,body{min-height:100vh;background:#050810;color:#fff;font-family:'Barlow',sans-serif;display:flex;flex-direction:column;align-items:center;padding-bottom:40px;}
 
-/* ── TITLE ── */
 .main-title{
     font-family:'Barlow Condensed',sans-serif;font-size:52px;font-weight:900;
     letter-spacing:10px;text-transform:uppercase;margin:32px 0 24px;
     background:linear-gradient(135deg,#00aaff,#8833ff);
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    text-align:center;
 }
 
-/* ── CARD ── */
 .card{
-    width:420px;background:rgba(255,255,255,0.03);
+    width:440px;background:rgba(255,255,255,0.03);
     border:1px solid rgba(255,255,255,0.08);border-radius:14px;
     overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.5);
-    margin-bottom:32px;
 }
 
 /* ── TABS ── */
@@ -32,17 +29,16 @@ html,body{min-height:100vh;background:#050810;color:#fff;font-family:'Barlow',sa
     flex:1;padding:14px 0;text-align:center;cursor:pointer;
     font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
     letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);
-    transition:color .15s,background .15s;border-bottom:2px solid transparent;
-    margin-bottom:-1px;
+    border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;
 }
 .tab:hover{color:rgba(255,255,255,0.65);}
 .tab.active{color:#fff;border-bottom-color:#00aaff;}
 
-/* ── PANEL ── */
+/* ── PANELS ── */
 .panel{display:none;padding:20px;flex-direction:column;gap:14px;}
 .panel.active{display:flex;}
 
-/* ── FORM ELEMENTS ── */
+/* ── FORM ── */
 .field{display:flex;flex-direction:column;gap:5px;}
 .field label{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:rgba(255,255,255,0.35);font-weight:700;}
 .field input,.field select{
@@ -51,97 +47,69 @@ html,body{min-height:100vh;background:#050810;color:#fff;font-family:'Barlow',sa
     border-radius:6px;font-family:'Barlow',sans-serif;font-size:14px;font-weight:600;
     outline:none;transition:border-color .15s;
 }
-.field input:focus,.field select:focus{border-color:rgba(0,170,255,0.6);}
+.field input:focus,.field select:focus{border-color:rgba(0,170,255,0.5);}
 .field select option{background:#111;}
-
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 
-/* ── PFP UPLOAD ── */
+/* ── PFP ── */
 .pfp-row{display:flex;align-items:center;gap:14px;}
 .pfp-wrap{position:relative;width:80px;height:80px;flex-shrink:0;}
 .pfp-img{width:80px;height:80px;border-radius:10px;object-fit:cover;border:2px solid rgba(255,255,255,0.15);}
-.pfp-overlay{
-    position:absolute;inset:0;border-radius:10px;
-    background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;
-    cursor:pointer;opacity:0;transition:opacity .15s;font-size:20px;
-}
+.pfp-overlay{position:absolute;inset:0;border-radius:10px;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity .15s;font-size:20px;}
 .pfp-wrap:hover .pfp-overlay{opacity:1;}
 #pfp-input{display:none;}
 
-/* ── BANNER PREVIEW ── */
-.banner-preview{
-    width:100%;height:58px;border-radius:7px;overflow:hidden;
-    position:relative;border:1px solid rgba(255,255,255,0.1);
-}
-.banner-preview img{width:100%;height:100%;object-fit:cover;opacity:0.6;}
-.banner-preview .title-over{
-    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;
-    letter-spacing:3px;text-shadow:1px 1px 4px rgba(0,0,0,0.9);text-transform:uppercase;
-}
-
-/* ── COSMETIC GRID (decal / boost) ── */
+/* ── COSMETIC GRID ── */
+.section-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.25);}
 .cosmetic-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
 .cosmetic-item{
     aspect-ratio:1;border-radius:8px;border:2px solid rgba(255,255,255,0.08);
     background:#0a0f1a;cursor:pointer;overflow:hidden;position:relative;
-    transition:border-color .12s,transform .12s;
     display:flex;align-items:center;justify-content:center;
+    transition:border-color .12s,transform .12s;
 }
 .cosmetic-item:hover{border-color:rgba(255,255,255,0.3);transform:scale(1.04);}
-.cosmetic-item.selected{border-color:#00aaff;box-shadow:0 0 12px rgba(0,170,255,0.5);}
-.cosmetic-item img{width:80%;height:80%;object-fit:contain;}
-.cosmetic-item .ci-label{
-    position:absolute;bottom:0;left:0;right:0;
-    font-size:8px;text-align:center;padding:3px;
-    background:rgba(0,0,0,0.7);color:rgba(255,255,255,0.5);
-    letter-spacing:1px;
-}
-.cosmetic-none{
-    font-size:9px;color:rgba(255,255,255,0.2);letter-spacing:1px;text-align:center;
-}
+.cosmetic-item.selected{border-color:#00aaff;box-shadow:0 0 12px rgba(0,170,255,0.4);}
+.cosmetic-item img{width:82%;height:82%;object-fit:contain;}
+.cosmetic-item .ci-label{position:absolute;bottom:0;left:0;right:0;font-size:7px;text-align:center;padding:2px;background:rgba(0,0,0,0.7);color:rgba(255,255,255,0.45);letter-spacing:1px;}
+.cosmetic-none{font-size:9px;color:rgba(255,255,255,0.2);letter-spacing:1px;text-align:center;padding:4px;}
 
-/* ── PLAY PANEL ── */
-.play-btn{
-    width:100%;padding:16px;border:none;border-radius:8px;cursor:pointer;
-    font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;
-    letter-spacing:4px;text-transform:uppercase;color:#fff;
-    transition:transform .12s,box-shadow .12s;
+/* Banner grid — wider items (show the banner shape) */
+.banner-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+.banner-item{
+    height:52px;border-radius:7px;border:2px solid rgba(255,255,255,0.08);
+    background:#0a0f1a;cursor:pointer;overflow:hidden;position:relative;
+    transition:border-color .12s,transform .1s;
 }
-.play-btn.create{
-    background:linear-gradient(135deg,#00aaff,#0055cc);
-    box-shadow:0 0 20px rgba(0,170,255,0.35);
-}
+.banner-item:hover{border-color:rgba(255,255,255,0.3);transform:scale(1.02);}
+.banner-item.selected{border-color:#00aaff;box-shadow:0 0 12px rgba(0,170,255,0.4);}
+.banner-item img{width:100%;height:100%;object-fit:cover;opacity:0.55;}
+.banner-item .bi-name{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-shadow:1px 1px 3px rgba(0,0,0,0.9);text-transform:uppercase;}
+
+/* ── PLAY ── */
+.play-btn{width:100%;padding:16px;border:none;border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:4px;text-transform:uppercase;color:#fff;transition:transform .12s,box-shadow .12s;}
+.play-btn.create{background:linear-gradient(135deg,#00aaff,#0055cc);box-shadow:0 0 20px rgba(0,170,255,0.35);}
 .play-btn.create:hover{transform:scale(1.02);box-shadow:0 0 35px rgba(0,170,255,0.6);}
-.play-btn.join{
-    background:linear-gradient(135deg,#ff6600,#cc3300);
-    box-shadow:0 0 20px rgba(255,102,0,0.35);
-}
-.play-btn.join:hover{transform:scale(1.02);box-shadow:0 0 35px rgba(255,102,0,0.6);}
-
 .divider{display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.15);font-size:11px;letter-spacing:2px;}
 .divider::before,.divider::after{content:"";flex:1;height:1px;background:rgba(255,255,255,0.08);}
-
 .join-row{display:flex;gap:10px;}
 .join-row input{flex:1;}
 .join-row button{padding:10px 18px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:6px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;transition:background .15s;}
-.join-row button:hover{background:rgba(255,255,255,0.15);}
-
-.section-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.25);margin-bottom:-6px;}
+.join-row button:hover{background:rgba(255,255,255,0.16);}
 </style>
 </head>
 <body>
 
-<div class="main-title">ROCKET HAX</div>
+<div class="main-title">CHAMPIONS FIELD</div>
 
 <div class="card">
   <div class="tabs">
-    <div class="tab active" onclick="switchTab('profile')">👤 Perfil</div>
-    <div class="tab" onclick="switchTab('garage')">🎨 Garaje</div>
-    <div class="tab" onclick="switchTab('play')">🚀 Jugar</div>
+    <div class="tab active" onclick="switchTab('profile')" id="tab-btn-profile">👤 Perfil</div>
+    <div class="tab"        onclick="switchTab('garage')"  id="tab-btn-garage" >🎨 Garaje</div>
+    <div class="tab"        onclick="switchTab('play')"    id="tab-btn-play"   >🚀 Jugar</div>
   </div>
 
-  <!-- ── PERFIL ── -->
+  <!-- ══ PERFIL ══ -->
   <div class="panel active" id="tab-profile">
     <div class="pfp-row">
       <div class="pfp-wrap" onclick="document.getElementById('pfp-input').click()">
@@ -170,54 +138,39 @@ html,body{min-height:100vh;background:#050810;color:#fff;font-family:'Barlow',sa
       </div>
     </div>
     <input type="file" id="pfp-input" accept="image/*">
-
-    <!-- Banner -->
-    <div class="field">
-      <label>Banner</label>
-      <select id="banner-select" onchange="previewBanner()">
-        <option value="Default.png">Banner Clásico</option>
-        <option value="Calculated.png">Fríamente Calculado</option>
-        <option value="Salty.png">Salty</option>
-        <option value="Espace.png">Space</option>
-        <option value="Abyss.png">Abyss</option>
-        <option value="Time.png">Time</option>
-        <option value="Frost.png">Frost</option>
-      </select>
-    </div>
-    <div class="banner-preview">
-      <img id="banner-preview-img" src="assets/banners/Default.png">
-      <div class="title-over" id="title-preview" style="color:#aaaaaa">ROOKIE</div>
-    </div>
   </div>
 
-  <!-- ── GARAJE ── -->
+  <!-- ══ GARAJE ══ -->
   <div class="panel" id="tab-garage">
+
+    <div class="section-label">Banner</div>
+    <div class="banner-grid" id="banner-grid">
+      <!-- filled by JS -->
+    </div>
 
     <div class="section-label">Decal</div>
     <div class="cosmetic-grid" id="decal-grid">
-      <div class="cosmetic-item selected" data-val="" onclick="selectDecal(this,'')">
+      <div class="cosmetic-item" data-val="" onclick="selectDecal(this,'')">
         <div class="cosmetic-none">NINGUNO</div>
       </div>
-      <!-- filled by JS -->
     </div>
 
-    <div class="section-label" style="margin-top:4px">Boost Trail</div>
+    <div class="section-label">Boost Trail</div>
     <div class="cosmetic-grid" id="boost-grid">
-      <div class="cosmetic-item selected" data-val="" onclick="selectBoost(this,'')">
+      <div class="cosmetic-item" data-val="" onclick="selectBoost(this,'')">
         <div class="cosmetic-none">DEFAULT</div>
       </div>
-      <!-- filled by JS -->
     </div>
 
   </div>
 
-  <!-- ── JUGAR ── -->
+  <!-- ══ JUGAR ══ -->
   <div class="panel" id="tab-play">
     <button class="play-btn create" onclick="createRoom()">CREAR SALA</button>
     <div class="divider">O</div>
     <div class="join-row">
       <div class="field" style="flex:1;margin:0">
-        <input id="roomCode" placeholder="Código de sala (ej. ABCDE)" style="text-transform:uppercase">
+        <input id="roomCode" placeholder="Código de sala  (ej. AB3CD)" style="text-transform:uppercase;letter-spacing:3px;">
       </div>
       <button onclick="joinRoom()">UNIRSE</button>
     </div>
@@ -227,56 +180,94 @@ html,body{min-height:100vh;background:#050810;color:#fff;font-family:'Barlow',sa
 <script src="/socket.io/socket.io.js"></script>
 <script src="setup.js"></script>
 <script>
-// Build cosmetic grids
-(function(){
-    const dg=document.getElementById("decal-grid")
-    const bg=document.getElementById("boost-grid")
+// ─── TAB SWITCH ──────────────────────────────────────────────────
+function switchTab(name){
+    ["profile","garage","play"].forEach(n=>{
+        document.getElementById("tab-btn-"+n).classList.toggle("active",n===name)
+        document.getElementById("tab-"+n).classList.toggle("active",n===name)
+    })
+}
 
-    // Decals 1-10 png, 11-15 gif
-    for(let i=1;i<=10;i++) addItem(dg,`decal${i}.png`,`assets/decals/decal${i}.png`,"selectDecal")
-    for(let i=11;i<=15;i++) addItem(dg,`decal${i}.gif`,`assets/decals/decal${i}.gif`,"selectDecal")
-    // Boosts 1-10
-    for(let i=1;i<=10;i++) addItem(bg,`boost${i}.png`,`assets/boost/boost${i}.png`,"selectBoost")
+// ─── BANNER GRID ─────────────────────────────────────────────────
+const BANNERS = [
+    { file:"Default.png",     label:"Clásico"      },
+    { file:"Calculated.png",  label:"Calculado"    },
+    { file:"Salty.png",       label:"Salty"        },
+    { file:"Espace.png",      label:"Space"        },
+    { file:"Abyss.png",       label:"Abyss"        },
+    { file:"Time.png",        label:"Time"         },
+    { file:"Frost.png",       label:"Frost"        },
+]
+;(function buildBannerGrid(){
+    const grid = document.getElementById("banner-grid")
+    BANNERS.forEach(b => {
+        const d  = document.createElement("div")
+        d.className  = "banner-item"
+        d.dataset.val = b.file
+        d.onclick    = () => selectBanner(d, b.file)
+        d.innerHTML  = `<img src="assets/banners/${b.file}" onerror="this.style.opacity=0">
+                        <div class="bi-name">${b.label}</div>`
+        grid.appendChild(d)
+    })
+})()
 
-    function addItem(grid,val,src,fn){
-        const d=document.createElement("div")
-        d.className="cosmetic-item"; d.dataset.val=val
-        d.setAttribute("onclick",`${fn}(this,'${val}')`)
-        d.innerHTML=`<img src="${src}" onerror="this.parentElement.style.display='none'"><div class="ci-label">${val.replace(/\.[^.]+$/,"")}</div>`
+function selectBanner(el, file){
+    document.querySelectorAll("#banner-grid .banner-item").forEach(x=>x.classList.remove("selected"))
+    el.classList.add("selected")
+    previewBanner(file)
+}
+
+// ─── DECAL / BOOST GRIDS ─────────────────────────────────────────
+;(function buildGrids(){
+    const dg = document.getElementById("decal-grid")
+    const bg = document.getElementById("boost-grid")
+    for(let i=1;i<=10;i++) addItem(dg, `decal${i}.png`, `assets/decals/decal${i}.png`,  "selectDecal")
+    for(let i=11;i<=15;i++) addItem(dg, `decal${i}.gif`,`assets/decals/decal${i}.gif`,  "selectDecal")
+    for(let i=1;i<=10;i++) addItem(bg, `boost${i}.png`, `assets/boost/boost${i}.png`,   "selectBoost")
+
+    function addItem(grid, val, src, fn){
+        const d = document.createElement("div")
+        d.className   = "cosmetic-item"
+        d.dataset.val = val
+        d.onclick     = () => window[fn](d, val)
+        d.innerHTML   = `<img src="${src}" onerror="this.parentElement.style.display='none'">
+                         <div class="ci-label">${val.replace(/\.[^.]+$/,"")}</div>`
         grid.appendChild(d)
     }
 })()
 
-function switchTab(name){
-    document.querySelectorAll(".tab").forEach((t,i)=>{
-        t.classList.toggle("active",["profile","garage","play"][i]===name)
-    })
-    document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"))
-    document.getElementById("tab-"+name).classList.add("active")
-}
-
-function selectDecal(el,val){
+function selectDecal(el, val){
     document.querySelectorAll("#decal-grid .cosmetic-item").forEach(x=>x.classList.remove("selected"))
     el.classList.add("selected")
     previewDecal(val)
 }
-function selectBoost(el,val){
+function selectBoost(el, val){
     document.querySelectorAll("#boost-grid .cosmetic-item").forEach(x=>x.classList.remove("selected"))
     el.classList.add("selected")
     previewBoost(val)
 }
 
-// Restore garage selections from saved player data
-;(function restoreGarage(){
-    const saved=JSON.parse(localStorage.getItem("playerData")||"{}")
-    if(saved.decal){
-        const el=document.querySelector(`#decal-grid [data-val="${saved.decal}"]`)
-        if(el){document.querySelectorAll("#decal-grid .cosmetic-item").forEach(x=>x.classList.remove("selected"));el.classList.add("selected")}
-    }
-    if(saved.boostTrail){
-        const el=document.querySelector(`#boost-grid [data-val="${saved.boostTrail}"]`)
-        if(el){document.querySelectorAll("#boost-grid .cosmetic-item").forEach(x=>x.classList.remove("selected"));el.classList.add("selected")}
-    }
+// ─── RESTORE SAVED SELECTIONS ────────────────────────────────────
+;(function restoreSelections(){
+    const saved = JSON.parse(localStorage.getItem("playerData") || "{}")
+
+    // Banner
+    const bannerFile = saved.banner ? saved.banner.split("/").pop() : "Default.png"
+    const bel = document.querySelector(`#banner-grid [data-val="${bannerFile}"]`)
+    if(bel) bel.classList.add("selected")
+    else    { const first=document.querySelector("#banner-grid .banner-item"); if(first) first.classList.add("selected") }
+
+    // Decal
+    const del = saved.decal
+        ? document.querySelector(`#decal-grid [data-val="${saved.decal}"]`)
+        : document.querySelector(`#decal-grid [data-val=""]`)
+    if(del) del.classList.add("selected")
+
+    // Boost
+    const bsel = saved.boostTrail
+        ? document.querySelector(`#boost-grid [data-val="${saved.boostTrail}"]`)
+        : document.querySelector(`#boost-grid [data-val=""]`)
+    if(bsel) bsel.classList.add("selected")
 })()
 </script>
 </body>
