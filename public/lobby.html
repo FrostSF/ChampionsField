@@ -1,55 +1,220 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="es">
 <head>
-<title>Lobby</title>
+<meta charset="UTF-8">
+<title>Lobby — Rocket Hax</title>
 <link rel="stylesheet" href="style.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;600;700&display=swap');
+
+.lobby-root{
+    display:grid;
+    grid-template-columns:280px 1fr 280px;
+    grid-template-rows:auto;
+    gap:16px;padding:16px;max-width:1200px;margin:0 auto;
+}
+
+/* ── TEAM PANELS ── */
+.team-panel{
+    background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;padding:14px;
+    display:flex;flex-direction:column;gap:10px;
+}
+.team-header{
+    display:flex;align-items:center;gap:8px;cursor:pointer;
+    font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;
+    letter-spacing:2px;text-transform:uppercase;
+    transition:transform .12s;user-select:none;
+}
+.team-header:hover{transform:scale(1.04);}
+.team-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+.team-players{display:flex;flex-direction:column;gap:6px;min-height:80px;}
+
+/* ── CENTRE COLUMN ── */
+.centre-col{
+    display:flex;flex-direction:column;gap:14px;align-items:center;
+}
+
+/* Room code box */
+.room-code-box{
+    font-family:'Barlow Condensed',sans-serif;
+    font-size:15px;font-weight:700;letter-spacing:4px;text-transform:uppercase;
+    background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+    border-radius:6px;padding:8px 22px;color:rgba(255,255,255,0.6);
+}
+.room-code-box span{color:#ffd700;font-size:20px;}
+
+/* Match settings card */
+.settings-card{
+    width:100%;background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.08);border-radius:10px;
+    padding:16px;display:flex;flex-direction:column;gap:10px;
+}
+.settings-card h3{
+    font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;
+    letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.4);
+    margin-bottom:2px;
+}
+
+.setting-row{display:flex;flex-direction:column;gap:4px;}
+.setting-row label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);font-family:'Barlow',sans-serif;}
+.setting-row input[type=text],.setting-row select{
+    width:100%;padding:8px 10px;background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:5px;
+    font-family:'Barlow',sans-serif;font-size:13px;font-weight:600;outline:none;
+}
+.setting-row input[type=text]:focus{border-color:rgba(255,255,255,0.35);}
+
+.settings-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+/* Color picker rows */
+.color-row{display:flex;align-items:center;gap:8px;}
+.color-row label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);font-family:'Barlow',sans-serif;flex:1;}
+.color-row input[type=color]{width:36px;height:28px;border:1px solid rgba(255,255,255,0.15);border-radius:4px;background:none;cursor:pointer;padding:2px;}
+
+/* Scoreboard preview */
+#sb-preview{
+    display:flex;flex-direction:column;align-items:center;gap:0;
+    font-family:'Barlow Condensed',sans-serif;
+}
+#sbp-series{
+    background:rgba(8,10,20,0.95);border:1px solid rgba(255,255,255,0.1);border-bottom:none;
+    padding:3px 18px;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.45);
+    display:flex;gap:8px;align-items:center;
+}
+#sbp-main{
+    display:flex;align-items:stretch;
+    background:rgba(8,10,20,0.95);border:1px solid rgba(255,255,255,0.1);
+    overflow:hidden;min-width:360px;
+}
+.sbp-slab{display:flex;align-items:center;}
+.sbp-bar{width:7px;height:100%;flex-shrink:0;}
+.sbp-name{font-size:17px;font-weight:900;padding:5px 12px;letter-spacing:1px;text-transform:uppercase;color:#fff;}
+.sbp-score{font-size:30px;font-weight:900;padding:4px 8px;color:#fff;background:rgba(255,255,255,0.05);border-left:1px solid rgba(255,255,255,0.08);border-right:1px solid rgba(255,255,255,0.08);}
+.sbp-timer{font-size:24px;font-weight:800;padding:4px 16px;color:#fff;letter-spacing:2px;}
+
+/* Start button */
+.start-btn{
+    width:100%;padding:14px;
+    background:linear-gradient(135deg,#00aaff,#6633ff);
+    border:none;border-radius:7px;
+    font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;
+    letter-spacing:4px;text-transform:uppercase;color:#fff;cursor:pointer;
+    transition:transform .12s,box-shadow .12s;
+    box-shadow:0 0 20px rgba(0,170,255,0.3);
+}
+.start-btn:hover{transform:scale(1.03);box-shadow:0 0 35px rgba(0,170,255,0.6);}
+.lobby-hint{font-size:11px;opacity:.3;letter-spacing:1px;text-align:center;}
+</style>
 </head>
-
 <body>
+<h1 class="title" style="margin:14px 0 10px;">ROCKET HAX</h1>
 
-<h1 class="title">CHAMPIONS FIELD</h1>
+<div class="lobby-root">
 
-<div class="lobby">
+  <!-- Blue team panel -->
+  <div class="team-panel">
+    <div class="team-header" onclick="joinTeam('blue')" id="blue-header">
+      <div class="team-dot" id="blue-dot" style="background:#00aaff;box-shadow:0 0 8px #00aaff"></div>
+      <span id="blue-label" style="color:#00aaff;">BLUE</span>
+    </div>
+    <div class="team-players" id="bluePlayers"></div>
+  </div>
 
-<div class="team">
+  <!-- Centre column -->
+  <div class="centre-col">
+    <!-- Room code -->
+    <div class="room-code-box">SALA: <span id="roomCode">—</span></div>
 
-<h2 onclick="joinTeam('red')" class="redText">ROJO</h2>
+    <!-- Scoreboard live preview -->
+    <div id="sb-preview">
+      <div id="sbp-series">
+        <span id="sbp-series-text">FRIENDLY MATCH</span>
+        <span style="color:rgba(255,255,255,0.2)">|</span>
+        <span id="sbp-game-text">GAME 1</span>
+        <span style="color:rgba(255,255,255,0.2)">|</span>
+        <span id="sbp-bo-text">BEST OF 7</span>
+      </div>
+      <div id="sbp-main">
+        <div class="sbp-slab">
+          <div class="sbp-bar" id="sbp-blue-bar" style="background:#00aaff;"></div>
+          <div class="sbp-name" id="sbp-blue-name">BLUE</div>
+        </div>
+        <div class="sbp-score">0</div>
+        <div class="sbp-timer">5:00</div>
+        <div class="sbp-score">0</div>
+        <div class="sbp-slab">
+          <div class="sbp-name" id="sbp-orange-name">ORANGE</div>
+          <div class="sbp-bar" id="sbp-orange-bar" style="background:#ff6600;"></div>
+        </div>
+      </div>
+    </div>
 
-<div id="redPlayers"></div>
+    <!-- Match settings -->
+    <div class="settings-card">
+      <h3>⚙ Configuración de Partido</h3>
 
-</div>
+      <div class="setting-row">
+        <label>Título de la serie</label>
+        <input type="text" id="cfg-series" value="FRIENDLY MATCH" oninput="pushSettings()">
+      </div>
 
+      <div class="settings-grid-2">
+        <div class="setting-row">
+          <label>Juego #</label>
+          <select id="cfg-gamenum" onchange="pushSettings()">
+            <option>1</option><option>2</option><option>3</option><option>4</option>
+            <option>5</option><option>6</option><option>7</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label>Mejor de</label>
+          <select id="cfg-bestof" onchange="pushSettings()">
+            <option>1</option><option>3</option><option>5</option><option selected>7</option>
+          </select>
+        </div>
+      </div>
 
-<div class="field">
+      <div class="settings-grid-2">
+        <div class="setting-row">
+          <label>Nombre equipo azul</label>
+          <input type="text" id="cfg-bluename" value="BLUE" oninput="pushSettings()">
+        </div>
+        <div class="setting-row">
+          <label>Nombre equipo naranja</label>
+          <input type="text" id="cfg-orangename" value="ORANGE" oninput="pushSettings()">
+        </div>
+      </div>
 
-<img src="assets/field.png">
+      <div class="settings-grid-2">
+        <div class="color-row">
+          <label>Color azul</label>
+          <input type="color" id="cfg-bluecolor" value="#00aaff" oninput="pushSettings()">
+        </div>
+        <div class="color-row">
+          <label>Color naranja</label>
+          <input type="color" id="cfg-orangecolor" value="#ff6600" oninput="pushSettings()">
+        </div>
+      </div>
+    </div>
 
-</div>
+    <button class="start-btn" onclick="startGame()">INICIAR PARTIDA</button>
+    <p class="lobby-hint">Haz clic en un equipo para unirte</p>
+  </div>
 
-
-<div class="team">
-
-<h2 onclick="joinTeam('blue')" class="blueText">AZUL</h2>
-
-<div id="bluePlayers"></div>
-
-</div>
-
-</div>
-
-<div class="roomCode">
-
-ROOM: <span id="roomCode"></span>
-
-<br><br>
-
-<button onclick="startGame()">INICIAR PARTIDA</button>
+  <!-- Orange team panel -->
+  <div class="team-panel">
+    <div class="team-header" onclick="joinTeam('orange')" id="orange-header">
+      <div class="team-dot" id="orange-dot" style="background:#ff6600;box-shadow:0 0 8px #ff6600"></div>
+      <span id="orange-label" style="color:#ff6600;">ORANGE</span>
+    </div>
+    <div class="team-players" id="orangePlayers"></div>
+  </div>
 
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="lobby.js"></script>
-
 </body>
 </html>

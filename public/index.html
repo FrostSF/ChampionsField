@@ -1,50 +1,64 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Rocket Hax</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<title>Rocket Hax</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body class="menu">
-    <h1 class="title">ROCKET HAX</h1>
-    <div class="setupBox">
-        <input id="username" placeholder="Tu nombre" oninput="checkSpecialTitle()">
-       
-        <select id="player-title" onchange="updateTitlePreview()">
-            <option value="ROOKIE|#aaaaaa">Rookie</option>
-            <option value="Champion|#aaaaaa">Champion</option>
-            <option value="EXPERT|#aaaaaa">Expert</option>
-            <option value="MASTER|#aaaaaa">Mater</option>
-            <option value="Papu|#aaaaaa">Papu</option>
-            <option value="EST2026|#aaaaaa">EST.2026</option>
-            <option value="Openfobico|#aaaaaa">Openfobico</option>
-            <option value="TheStadium|#aaaaaa">The Stadium</option>
-            <option value="ooeeoo|#aaaaaa">ooeeoo</option>
-        </select>
 
-        <select id="banner-select" onchange="previewBanner()">
-            <option value="Default.png">Banner Clasico</option>
-            <option value="Calculated.png">Friamente Calculado</option>
-            <option value="Salty.png">Salty</option>
-            <option value="Espace.png">Space</option>
-            <option value="Abyss.png">Abyss</option>
-            <option value="Time.png">Time</option>
-            <option value="Frost.png">Frost</option>
-        </select>
+<h1 class="title">ROCKET HAX</h1>
 
-        <input type="file" id="pfp-input" accept="image/*">
-        <img id="pfp-preview" src="assets/default_pfp.png" class="pfpPreview">
+<div class="setupBox">
 
-        <div id="banner-preview-container" style="width: 200px; height: 50px; border: 2px solid white; margin: 10px auto; overflow: hidden; position: relative; border-radius: 5px;">
-            <img id="banner-preview-img" src="assets/banners/default.png" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.6;">
-            <div id="title-preview" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; font-size: 12px; color: #aaa; text-shadow: 1px 1px 2px black;">ROOKIE</div>
-        </div>
+  <!-- PFP preview -->
+  <img id="pfp-preview" src="assets/default_pfp.png" class="pfpPreview">
+  <input type="file" id="pfp-input" accept="image/*" style="font-size:11px">
 
-        <button onclick="createRoom()">CREAR SALA</button>
-        <input id="roomCode" placeholder="Código sala">
-        <button onclick="joinRoom()">UNIRSE</button>
-    </div>
+  <!-- Name -->
+  <input id="username" placeholder="Tu nombre" oninput="checkSpecialTitle()">
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="setup.js"></script>
+  <!-- Title -->
+  <select id="player-title" onchange="updateTitlePreview()">
+    <option value="ROOKIE|#aaaaaa">Rookie</option>
+    <option value="CHAMPION|#ffd700">Champion</option>
+    <option value="EXPERT|#00ccff">Expert</option>
+    <option value="MASTER|#ff44ff">Master</option>
+    <option value="PAPU|#ff4444">Papu</option>
+    <option value="EST.2026|#44ff88">EST.2026</option>
+    <option value="OPENFÓBICO|#ff8c00">Openfóbico</option>
+    <option value="THE STADIUM|#ffffff">The Stadium</option>
+    <option value="ooeeoo|#aaffee">ooeeoo</option>
+  </select>
+
+  <!-- Banner -->
+  <select id="banner-select" onchange="previewBanner()">
+    <option value="Default.png">Banner Clásico</option>
+    <option value="Calculated.png">Fríamente Calculado</option>
+    <option value="Salty.png">Salty</option>
+    <option value="Espace.png">Space</option>
+    <option value="Abyss.png">Abyss</option>
+    <option value="Time.png">Time</option>
+    <option value="Frost.png">Frost</option>
+  </select>
+
+  <!-- Banner + title preview -->
+  <div id="banner-preview-container">
+    <img id="banner-preview-img" src="assets/banners/Default.png">
+    <div id="title-preview">ROOKIE</div>
+  </div>
+
+  <!-- Buttons -->
+  <button onclick="createRoom()">CREAR SALA</button>
+
+  <div style="display:flex;gap:8px">
+    <input id="roomCode" placeholder="Código sala" style="flex:1">
+    <button onclick="joinRoom()" style="padding:10px 14px">UNIRSE</button>
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="setup.js"></script>
 </body>
 </html>

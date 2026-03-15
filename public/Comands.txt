@@ -1,3 +1,0 @@
-git add .
-git commit -m "Añadido sistema de boost y pads de recarga"
-git push origin main
