@@ -20,15 +20,15 @@ const ACCEL=900,FRICTION=0.88,MAX_SPD=580
 const BOOST_ACCEL=1400,BOOST_MAX=860,BOOST_DRAIN=38,BOOST_REGEN=0  // no auto-regen
 const DASH_SPEED=MAX_SPD*1.3,DASH_DUR=0.16,DASH_CD=1.0
 
-// ─── RENDER STATE ────────────────────────────────────────────────
-let myId=null
-let isHost=false
-let ball={x:W/2,y:H/2,spin:0},ballAngle=0
-let scores={blue:0,orange:0},matchTime=300,padAng=0
-let gamePhase="playing",kickoffTimer=0
-let settings={blueTeamName:"BLUE",orangeTeamName:"ORANGE",blueColor:"#00aaff",orangeColor:"#ff6600",seriesTitle:"FRIENDLY MATCH",gameNum:1,bestOf:7}
+// ─── RENDER STATE — var so game.html bootstrap can write these globals ──────
+var myId=null
+var isHost=false
+var ball={x:W/2,y:H/2,spin:0},ballAngle=0
+var scores={blue:0,orange:0},matchTime=300,padAng=0
+var gamePhase="playing",kickoffTimer=0
+var settings={blueTeamName:"BLUE",orangeTeamName:"ORANGE",blueColor:"#00aaff",orangeColor:"#ff6600",seriesTitle:"FRIENDLY MATCH",gameNum:1,bestOf:7}
 const particles=[]
-let dimAlpha=0
+var dimAlpha=0
 
 const PADS_POS=[
     {x:180,y:180,type:"big"},{x:W-180,y:180,type:"big"},
