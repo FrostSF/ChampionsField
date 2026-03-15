@@ -220,7 +220,16 @@ document.addEventListener("keyup",e=>{
     const k=e.key==="Shift"?"shift":e.code==="Space"?"dash":e.key.toLowerCase()
     keys[k]=false
 })
-function getInput(){return{w:!!keys.w,a:!!keys.a,s:!!keys.s,d:!!keys.d,shift:!!keys.shift,dash:!!keys.dash}}
+function getInput(){
+    return{
+        w:    !!(keys.w    || keys._mw),
+        a:    !!(keys.a    || keys._ma),
+        s:    !!(keys.s    || keys._ms),
+        d:    !!(keys.d    || keys._md),
+        shift:!!(keys.shift|| keys._mshift),
+        dash: !!(keys.dash || keys._mdash)
+    }
+}
 
 // Input loop is handled by game.html bootstrap (socket.emit "input")
 // game.js only needs getInput() for local prediction in the render loop
