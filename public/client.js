@@ -1,10 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
-//  ROCKET HAX — CLIENT.JS
-//  Runs in every NON-HOST browser.
-//  • Connects to host via WebRTC DataChannel
-//  • Sends input to host ~60fps
-//  • Receives authoritative state and passes to renderer
-//  • Runs client-side prediction for the local player
+//  CHAMPIONS FIELD — CLIENT.JS
+//  WebRTC client — connects to host's DataChannel.
+//  Connection is initiated from the LOBBY and reused in game.html.
 // ═══════════════════════════════════════════════════════════════
 
 const RTC_CONFIG={
@@ -14,57 +11,70 @@ const RTC_CONFIG={
     ]
 }
 
-let _pc=null, _dc=null
-let _sigSocket=null, _hostId=null
-let _myId=null
+let _pc=null, _dc=null, _hostId=null, _myId=null
 
-// ─── CONNECT TO HOST ─────────────────────────────────────────────
+// Called from lobby.js when host info is known
 async function clientConnect(hostId, sigSocket, myId){
-    _hostId=hostId; _sigSocket=sigSocket; _myId=myId
+    _hostId=hostId; _myId=myId
 
+    if(_pc){ try{_pc.close()}catch{} }
     _pc=new RTCPeerConnection(RTC_CONFIG)
 
-    // DataChannel will be created BY the host — we receive it here
+    // Host creates the DataChannel — we receive it via ondatachannel
     _pc.ondatachannel=e=>{
         _dc=e.channel
-        _dc.onopen=()=>{ console.log("DataChannel open to host"); onClientConnected() }
+        _dc.onopen=()=>{
+            console.log("[client] DataChannel open to host")
+            // Start sending input
+            setInterval(()=>{
+                if(_dc.readyState==="open" && typeof getInput==="function")
+                    clientSendInput(getInput())
+            },1000/60)
+        }
         _dc.onmessage=e=>{ try{ onHostMessage(JSON.parse(e.data)) }catch{} }
-        _dc.onclose=()=>{ console.warn("DataChannel closed"); onClientDisconnected() }
+        _dc.onclose=()=>{
+            console.warn("[client] DataChannel closed")
+            if(typeof onGameEvent==="function") onGameEvent({type:"hostDisconnected"})
+        }
     }
 
     _pc.onicecandidate=e=>{
         if(e.candidate) sigSocket.emit("rtc:ice",{to:hostId,candidate:e.candidate})
     }
-
-    // Host will send us an offer — we wait for it via "rtc:offer" signaling event
 }
 
 async function onRtcOffer(from, offer){
-    if(from!==_hostId) return
+    if(from!==_hostId||!_pc) return
     await _pc.setRemoteDescription(new RTCSessionDescription(offer))
     const answer=await _pc.createAnswer()
     await _pc.setLocalDescription(answer)
-    _sigSocket.emit("rtc:answer",{to:_hostId,answer})
+    // We need the sigSocket here — stored globally in lobby/game bootstrap
+    if(typeof _sigSocket!=="undefined") _sigSocket.emit("rtc:answer",{to:_hostId,answer})
 }
 
 function onRtcIce(from, candidate){
-    if(from!==_hostId) return
+    if(from!==_hostId||!_pc) return
     _pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(()=>{})
 }
 
-// ─── SEND INPUT TO HOST ───────────────────────────────────────────
-let _inputSeq=0
 function clientSendInput(inp){
     if(!_dc||_dc.readyState!=="open") return
-    _inputSeq++
-    _dc.send(JSON.stringify({type:"input",input:inp,seq:_inputSeq}))
+    _clientSeq=(_clientSeq||0)+1
+    _dc.send(JSON.stringify({type:"input",input:inp,seq:_clientSeq}))
 }
+let _clientSeq=0
 
-// ─── RECEIVE MESSAGES FROM HOST ───────────────────────────────────
+// For prediction reconciliation
+const _inputBuf=[]
+function clientBufferInput(inp,seq){
+    _inputBuf.push({seq,inp,dt:1/60})
+    if(_inputBuf.length>120) _inputBuf.shift()
+}
+function clientGetInputBuf(){ return _inputBuf }
+
 function onHostMessage(msg){
     switch(msg.type){
         case "init":
-            // Host sends full player list + settings on connect
             if(typeof onGameInit==="function") onGameInit(msg)
             break
         case "state":
@@ -73,27 +83,12 @@ function onHostMessage(msg){
         case "goal":
         case "kickoff":
         case "gameOver":
+        case "hostDisconnected":
             if(typeof onGameEvent==="function") onGameEvent(msg)
             break
     }
 }
 
-// Called when DataChannel opens — start sending input
-function onClientConnected(){
-    setInterval(()=>{
-        if(typeof getInput==="function") clientSendInput(getInput())
-    },1000/60)
-}
-
-function onClientDisconnected(){
-    // game.html will handle showing a disconnect screen
-    if(typeof onGameEvent==="function") onGameEvent({type:"hostDisconnected"})
-}
-
-// ─── INPUT BUFFER for client-side prediction ─────────────────────
-const _inputBuf=[]
-function clientBufferInput(inp,seq){
-    _inputBuf.push({seq,inp,dt:1/60})
-    if(_inputBuf.length>120) _inputBuf.shift()
-}
-function clientGetInputBuf(){ return _inputBuf }
+// Expose sigSocket reference so onRtcOffer can use it
+let _sigSocket=null
+function clientSetSigSocket(s){ _sigSocket=s }

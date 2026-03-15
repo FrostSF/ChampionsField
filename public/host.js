@@ -1,13 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
-//  ROCKET HAX — HOST.JS
-//  Runs in the HOST's browser.
-//  • Owns the full game physics (was server.js)
-//  • Accepts WebRTC DataChannel connections from peers
-//  • Broadcasts authoritative game state to all peers ~60fps
-//  • Receives input from peers via DataChannel
+//  CHAMPIONS FIELD — HOST.JS
+//  Physics engine + WebRTC host.
+//  Connections are opened in the LOBBY and reused in game.html.
 // ═══════════════════════════════════════════════════════════════
 
-// ─── STUN CONFIG ─────────────────────────────────────────────────
 const RTC_CONFIG = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -22,14 +18,10 @@ const GOAL_W=40,GOAL_H=200,GOAL_CY=H/2
 const GOAL_L={x:WALL_L-GOAL_W,y:GOAL_CY-GOAL_H/2,w:GOAL_W,h:GOAL_H}
 const GOAL_R={x:WALL_R,       y:GOAL_CY-GOAL_H/2,w:GOAL_W,h:GOAL_H}
 const BALL_R=24,CAR_R=22
-
-// ─── PHYSICS CONSTANTS ───────────────────────────────────────────
 const DT=1/60
 const ACCEL=900,FRICTION=0.88,MAX_SPD=580
-const BOOST_ACCEL=1400,BOOST_MAX=860,BOOST_DRAIN=38,BOOST_REGEN=0  // no auto-regen, only pads
+const BOOST_ACCEL=1400,BOOST_MAX=860,BOOST_DRAIN=38,BOOST_REGEN=0
 const DASH_SPEED=MAX_SPD*2.0,DASH_DUR=0.18,DASH_CD=1.2
-
-// ─── PADS TEMPLATE ───────────────────────────────────────────────
 const PADS_TMPL=[
     {x:180,y:180,type:"big",value:100},{x:W-180,y:180,type:"big",value:100},
     {x:180,y:H-180,type:"big",value:100},{x:W-180,y:H-180,type:"big",value:100},
@@ -40,42 +32,47 @@ const PADS_TMPL=[
     {x:W*.3,y:H*.7,type:"small",value:25},{x:W*.7,y:H*.7,type:"small",value:25},
 ]
 
-// ─── GAME STATE ──────────────────────────────────────────────────
-let gameState = null   // built when game starts
+// ─── GLOBAL STATE ────────────────────────────────────────────────
+let gameState  = null
+let HOST_ID    = ""
+// peers: { [peerId]: { pc, dc } } — built in LOBBY, used in game
+const peers = {}
 
+// ─── SPAWN ───────────────────────────────────────────────────────
 function spawnPos(team,index,total){
-    const side=team==="blue"?WALL_L+160:WALL_R-160
-    const span=200,step=total>1?span/(total-1):0
+    const side = team==="blue" ? WALL_L+160 : WALL_R-160
+    const span=200, step=total>1?span/(total-1):0
     return {x:side, y:H/2-span/2+index*step}
 }
 
 function makeGameState(players, settings){
     const blues=players.filter(p=>p.team==="blue")
     const oranges=players.filter(p=>p.team==="orange")
-    const allPlayers=players.map(p=>{
-        const sameTeam=p.team==="blue"?blues:oranges
+    const all=players.map(p=>{
+        const team=p.team==="orange"?"orange":"blue"
+        const sameTeam=team==="blue"?blues:oranges
         const idx=sameTeam.findIndex(x=>x.id===p.id)
-        const sp=spawnPos(p.team,idx,sameTeam.length)
+        const sp=spawnPos(team,Math.max(0,idx),sameTeam.length)
         return {
-            id:p.id, team:p.team,
+            id:p.id, team,
             name:p.name||"?", title:p.title||"", titleColor:p.titleColor||"#aaa",
-            pfp:p.pfp||"assets/default_pfp.png", banner:p.banner||"assets/banners/Default.png",
+            pfp:p.pfp||"assets/default_pfp.png",
+            banner:p.banner||"assets/banners/Default.png",
             decal:p.decal||null, boostTrail:p.boostTrail||null,
-            x:sp.x,y:sp.y,vx:0,vy:0,boost:33,
-            dashing:false,dashTimer:0,dashCd:0,dashVx:0,dashVy:0,
-            input:{},lastSeq:0
+            x:sp.x, y:sp.y, vx:0, vy:0, boost:33,
+            dashing:false, dashTimer:0, dashCd:0, dashVx:0, dashVy:0,
+            input:{}, lastSeq:0
         }
     })
     return {
-        players:  allPlayers,
-        ball:     {x:W/2,y:H/2,vx:0,vy:0,spin:0},
-        pads:     PADS_TMPL.map(p=>({...p,active:true,timer:0})),
-        scores:   {blue:0,orange:0},
+        players:all,
+        ball:{x:W/2,y:H/2,vx:0,vy:0,spin:0},
+        pads:PADS_TMPL.map(p=>({...p,active:true,timer:0})),
+        scores:{blue:0,orange:0},
         matchTime:300,
-        phase:    "kickoffCountdown",
-        kickoffTimer: 3,
-        settings: {...settings},
-        goalCooldown: 0
+        phase:"kickoffCountdown",
+        kickoffTimer:3,
+        settings:{...settings}
     }
 }
 
@@ -83,9 +80,9 @@ function resetAfterGoal(gs){
     const blues=gs.players.filter(p=>p.team==="blue")
     const oranges=gs.players.filter(p=>p.team==="orange")
     gs.players.forEach(p=>{
-        const sameTeam=p.team==="blue"?blues:oranges
-        const idx=sameTeam.findIndex(x=>x.id===p.id)
-        const sp=spawnPos(p.team,idx,sameTeam.length)
+        const st=p.team==="blue"?blues:oranges
+        const idx=Math.max(0,st.findIndex(x=>x.id===p.id))
+        const sp=spawnPos(p.team,idx,st.length)
         p.x=sp.x;p.y=sp.y;p.vx=0;p.vy=0;p.dashing=false;p.dashTimer=0
     })
     gs.ball={x:W/2,y:H/2,vx:0,vy:0,spin:0}
@@ -96,11 +93,9 @@ function resetAfterGoal(gs){
     gs.settings.gameNum=(gs.settings.gameNum||1)+1
 }
 
-// ─── PHYSICS TICK ────────────────────────────────────────────────
+// ─── PHYSICS ─────────────────────────────────────────────────────
 function physicsTick(gs){
     const dt=DT
-
-    // Kickoff countdown
     if(gs.phase==="kickoffCountdown"){
         gs.kickoffTimer-=dt
         if(gs.kickoffTimer<=0){gs.phase="playing";gs.kickoffTimer=0}
@@ -114,7 +109,6 @@ function physicsTick(gs){
         if(boosting) p.boost=Math.max(0,  p.boost-BOOST_DRAIN*dt)
         else          p.boost=Math.min(100,p.boost+BOOST_REGEN*dt)
         if(p.dashCd>0) p.dashCd-=dt
-
         if(inp.dash&&!p.dashing&&p.dashCd<=0){
             let dx=(inp.d?1:0)-(inp.a?1:0),dy=(inp.s?1:0)-(inp.w?1:0)
             if(Math.hypot(dx,dy)<0.1){dx=p.vx;dy=p.vy}
@@ -150,28 +144,23 @@ function physicsTick(gs){
             }
         })
     })
-
     gs.pads.forEach(pad=>{if(!pad.active&&--pad.timer<=0)pad.active=true})
 
-    // Ball
     const b=gs.ball
     b.vx*=Math.pow(0.9985,dt*60);b.vy*=Math.pow(0.9985,dt*60)
-    b.spin*=Math.pow(0.990,dt*60)
-    b.x+=b.vx*dt;b.y+=b.vy*dt
-
+    b.spin*=Math.pow(0.990,dt*60);b.x+=b.vx*dt;b.y+=b.vy*dt
     if(b.x-BALL_R<WALL_L){
         const inG=b.y>GOAL_L.y&&b.y<GOAL_L.y+GOAL_L.h
-        if(inG&&b.x+BALL_R<GOAL_L.x){ handleGoal(gs,"orange"); return }
+        if(inG&&b.x+BALL_R<GOAL_L.x){handleGoal(gs,"orange");return}
         else if(!inG){b.x=WALL_L+BALL_R;b.vx=Math.abs(b.vx)*0.72;b.spin=-b.spin*0.5}
     }
     if(b.x+BALL_R>WALL_R){
         const inG=b.y>GOAL_R.y&&b.y<GOAL_R.y+GOAL_R.h
-        if(inG&&b.x-BALL_R>GOAL_R.x+GOAL_R.w){ handleGoal(gs,"blue"); return }
+        if(inG&&b.x-BALL_R>GOAL_R.x+GOAL_R.w){handleGoal(gs,"blue");return}
         else if(!inG){b.x=WALL_R-BALL_R;b.vx=-Math.abs(b.vx)*0.72;b.spin=-b.spin*0.5}
     }
     if(b.y-BALL_R<WALL_T){b.y=WALL_T+BALL_R;b.vy=Math.abs(b.vy)*0.72}
     if(b.y+BALL_R>WALL_B){b.y=WALL_B-BALL_R;b.vy=-Math.abs(b.vy)*0.72}
-
     gs.players.forEach(p=>{
         const dx=b.x-p.x,dy=b.y-p.y,dist=Math.hypot(dx,dy),minD=BALL_R+CAR_R
         if(dist<minD&&dist>0.01){
@@ -185,7 +174,6 @@ function physicsTick(gs){
             }
         }
     })
-
     gs.matchTime-=dt
     if(gs.matchTime<=0){gs.matchTime=0;gs.phase="over"}
 }
@@ -193,7 +181,6 @@ function physicsTick(gs){
 function handleGoal(gs,scorer){
     gs.scores[scorer]++
     gs.phase="goal"
-    // Broadcast goal event immediately, then schedule reset
     broadcastEvent({type:"goal",scorer,scores:gs.scores,settings:gs.settings})
     setTimeout(()=>{
         resetAfterGoal(gs)
@@ -201,43 +188,39 @@ function handleGoal(gs,scorer){
     },3000)
 }
 
-// ─── WEBRTC PEER CONNECTIONS ──────────────────────────────────────
-// peers[peerId] = { pc: RTCPeerConnection, dc: RTCDataChannel }
-const peers={}
-
+// ─── WEBRTC ──────────────────────────────────────────────────────
+// Creates a peer connection and DataChannel for one client.
+// sigSocket = the signaling socket (works from lobby OR game page).
 async function createPeerConnection(peerId, sigSocket){
+    if(peers[peerId]){
+        // Already have a connection — tear it down and redo
+        try{peers[peerId].dc.close();peers[peerId].pc.close()}catch{}
+        delete peers[peerId]
+    }
     const pc=new RTCPeerConnection(RTC_CONFIG)
-    // DataChannel for game data (unreliable = lower latency, like UDP)
-    const dc=pc.createDataChannel("game",{
-        ordered:false,          // don't wait for retransmit
-        maxRetransmits:0        // drop stale packets — we want freshest state
-    })
+    const dc=pc.createDataChannel("game",{ordered:false,maxRetransmits:0})
     peers[peerId]={pc,dc}
 
     dc.onopen=()=>{
-        console.log("DataChannel open with",peerId)
-        // Send full player info so peer can render names/cosmetics
+        console.log("[host] DataChannel open →",peerId)
         if(gameState){
+            // Game already running — send init packet
             dc.send(JSON.stringify({
-                type:"init",
-                myId: peerId,
-                players: gameState.players,
-                settings: gameState.settings
+                type:"init", myId:peerId,
+                players:gameState.players, settings:gameState.settings
             }))
         }
     }
-
     dc.onmessage=e=>{
         try{
             const msg=JSON.parse(e.data)
             if(msg.type==="input"){
                 const p=gameState&&gameState.players.find(x=>x.id===peerId)
-                if(p){ p.input=msg.input; p.lastSeq=msg.seq||0 }
+                if(p){p.input=msg.input;p.lastSeq=msg.seq||0}
             }
         }catch{}
     }
-
-    dc.onclose=()=>{ console.log("DataChannel closed",peerId); delete peers[peerId] }
+    dc.onclose=()=>{ console.log("[host] DataChannel closed",peerId); delete peers[peerId] }
     pc.onicecandidate=e=>{
         if(e.candidate) sigSocket.emit("rtc:ice",{to:peerId,candidate:e.candidate})
     }
@@ -245,23 +228,18 @@ async function createPeerConnection(peerId, sigSocket){
     const offer=await pc.createOffer()
     await pc.setLocalDescription(offer)
     sigSocket.emit("rtc:offer",{to:peerId,offer})
-    return pc
 }
 
 function broadcastState(){
     if(!gameState) return
     const msg=JSON.stringify(buildStateMsg())
-    Object.values(peers).forEach(({dc})=>{
-        if(dc.readyState==="open") dc.send(msg)
-    })
-    // Also update host's own renderer
+    Object.values(peers).forEach(({dc})=>{ if(dc.readyState==="open") dc.send(msg) })
     if(typeof onStateUpdate==="function") onStateUpdate(buildStateMsg())
 }
 
 function broadcastEvent(evt){
     const msg=JSON.stringify(evt)
     Object.values(peers).forEach(({dc})=>{ if(dc.readyState==="open") dc.send(msg) })
-    // Also fire for host renderer
     if(typeof onGameEvent==="function") onGameEvent(evt)
 }
 
@@ -270,49 +248,36 @@ function buildStateMsg(){
     return {
         type:"state",
         players:gs.players.map(p=>({
-            id:p.id, x:Math.round(p.x), y:Math.round(p.y),
-            vx:+p.vx.toFixed(1), vy:+p.vy.toFixed(1),
-            boost:Math.floor(p.boost), dashing:p.dashing,
+            id:p.id,x:Math.round(p.x),y:Math.round(p.y),
+            vx:+p.vx.toFixed(1),vy:+p.vy.toFixed(1),
+            boost:Math.floor(p.boost),dashing:p.dashing,
             dashTimer:+(p.dashTimer||0).toFixed(3),
             dashCd:+(p.dashCd||0).toFixed(2),
             isBoosting:!!(p.input.shift&&p.boost>0),
             seq:p.lastSeq||0,
-            decal:p.decal||null, boostTrail:p.boostTrail||null
+            decal:p.decal||null,boostTrail:p.boostTrail||null
         })),
         ball:{x:Math.round(gs.ball.x),y:Math.round(gs.ball.y),spin:+gs.ball.spin.toFixed(2)},
         pads:gs.pads.map(p=>({active:p.active})),
-        scores:gs.scores, matchTime:Math.ceil(gs.matchTime),
-        settings:gs.settings,
-        phase:gs.phase, kickoffTimer:Math.ceil(gs.kickoffTimer||0)
+        scores:gs.scores,matchTime:Math.ceil(gs.matchTime),
+        settings:gs.settings,phase:gs.phase,
+        kickoffTimer:Math.ceil(gs.kickoffTimer||0)
     }
 }
 
-// ─── PUBLIC API — called from game.html ──────────────────────────
-
-// Called once host is in game page and all peers are connected
+// ─── PUBLIC API ───────────────────────────────────────────────────
 function hostStartGame(players, settings){
     gameState=makeGameState(players,settings)
-    // Physics loop — setInterval is accurate enough, 60fps
-    setInterval(()=>{
-        if(!gameState) return
-        physicsTick(gameState)
-        broadcastState()
-    },1000/60)
+    setInterval(()=>{ if(gameState){physicsTick(gameState);broadcastState()} },1000/60)
 }
-
-// Host also sends its OWN input each frame
 function hostSetInput(inp){
     if(!gameState) return
     const me=gameState.players.find(p=>p.id===HOST_ID)
     if(me) me.input=inp
 }
-
-// Called from lobby when signaling server says a peer joined
 async function onPeerJoined(peerId, playerData, sigSocket){
     await createPeerConnection(peerId, sigSocket)
 }
-
-// Handle incoming WebRTC signaling from server
 function onRtcAnswer(from, answer){
     const peer=peers[from]; if(!peer) return
     peer.pc.setRemoteDescription(new RTCSessionDescription(answer))
@@ -321,6 +286,3 @@ function onRtcIce(from, candidate){
     const peer=peers[from]; if(!peer) return
     peer.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(()=>{})
 }
-
-// HOST_ID — set externally from game.html before calling hostStartGame
-let HOST_ID=""

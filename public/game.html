@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Rocket Hax</title>
+<title>Champions Field</title>
 <link rel="stylesheet" href="style.css">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;600;700&display=swap');
@@ -128,138 +128,141 @@ html,body{width:100%;height:100%;background:#050810;overflow:hidden;font-family:
 <script src="game.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  GAME PAGE BOOTSTRAP
-//  Reads URL params, detects host vs client, wires P2P.
+//  GAME PAGE BOOTSTRAP  — simplified P2P version
+//  WebRTC connections were already opened in lobby.html.
+//  Here we just start physics (host) or wire callbacks (client).
 // ═══════════════════════════════════════════════════════════════
-(async function() {
-    const params      = new URLSearchParams(window.location.search)
-    const roomCode    = params.get("room")
-    const amHost      = params.get("host") === "1"
-    const playerData  = JSON.parse(localStorage.getItem("playerData") || "{}")
+(async function(){
+    const params     = new URLSearchParams(window.location.search)
+    const roomCode   = params.get("room")
+    const amHostPage = params.get("host") === "1"
+    const playerData = JSON.parse(localStorage.getItem("playerData") || "{}")
 
-    // Signaling socket — used ONLY for WebRTC handshake, then idle
+    // New signaling socket — needed to stay in the socket.io room
+    // so we keep receiving ICE candidates if they trickle late
     const sigSocket = io()
+    _sigSocket = sigSocket   // client.js uses this for rtc:answer
 
-    function showConnecting(msg) {
+    function showConnecting(msg){
         document.getElementById("connecting-msg").textContent = msg
     }
-    function hideConnecting() {
-        document.getElementById("connecting").style.display    = "none"
-        document.getElementById("scoreboard").style.display   = "flex"
-        document.getElementById("boost-wrap").style.display   = "flex"
+    function hideConnecting(){
+        document.getElementById("connecting").style.display  = "none"
+        document.getElementById("scoreboard").style.display  = "flex"
+        document.getElementById("boost-wrap").style.display  = "flex"
     }
 
-    // ── HOST PATH ──────────────────────────────────────────────
-    if (amHost) {
-        isHost = true
-        showConnecting("Esperando jugadores...")
+    sigSocket.on("connect", () => {
+        // Rejoin the signaling room so ICE trickle still works
+        sigSocket.emit("joinLobby", { room: roomCode, ...playerData })
+    })
 
-        sigSocket.on("connect", () => {
-            HOST_ID = sigSocket.id
-            myId    = sigSocket.id
-        })
+    // Keep relaying ICE candidates that trickle after navigation
+    sigSocket.on("rtc:ice", ({ from, candidate }) => {
+        if(amHostPage) onRtcIce(from, candidate)
+        else           onRtcIce(from, candidate)
+    })
+    sigSocket.on("rtc:answer", ({ from, answer }) => {
+        if(amHostPage) onRtcAnswer(from, answer)
+    })
+    sigSocket.on("rtc:offer", ({ from, offer }) => {
+        if(!amHostPage) onRtcOffer(from, offer)
+    })
+    sigSocket.on("hostDisconnected", () => onGameEvent({type:"hostDisconnected"}))
+    sigSocket.on("peerJoined", async ({peerId, playerData: pd}) => {
+        if(amHostPage) await onPeerJoined(peerId, pd, sigSocket)
+    })
 
-        // When a peer joins the room, create WebRTC offer
-        sigSocket.on("peerJoined", async ({ peerId, playerData: pd }) => {
-            showConnecting(`Conectando con ${pd.name||"jugador"}...`)
-            await onPeerJoined(peerId, pd, sigSocket)
-        })
+    // ── HOST ──────────────────────────────────────────────────
+    if(amHostPage){
+        isHost  = true
+        HOST_ID = localStorage.getItem("hostId") || ""
+        myId    = HOST_ID
 
-        // Handle WebRTC answers from peers
-        sigSocket.on("rtc:answer", ({ from, answer }) => onRtcAnswer(from, answer))
-        sigSocket.on("rtc:ice",    ({ from, candidate }) => onRtcIce(from, candidate))
-
-        // Peer disconnected
-        sigSocket.on("peerLeft", ({ peerId }) => {
-            const peer = peers[peerId]
-            if (peer) { try{ peer.dc.close(); peer.pc.close() }catch{} }
-            delete peers[peerId]
-            // Update player list in game state
-            if (gameState) {
-                gameState.players = gameState.players.filter(p => p.id !== peerId)
-                // Broadcast updated player list to remaining clients
-                Object.values(peers).forEach(({dc}) => {
-                    if(dc.readyState === "open")
-                        dc.send(JSON.stringify({ type:"init", myId:"_", players:gameState.players, settings:gameState.settings }))
-                })
-            }
-        })
-
-        // "Start Game" button in lobby redirects here with ?host=1
-        // We wait for lobbyData in localStorage set by lobby.js before starting
         const lobbyData = JSON.parse(localStorage.getItem("lobbyData") || "null")
-        if (lobbyData) {
-            // Give peers 1 second to receive DataChannel init after first connection
-            // Then start physics
-            const waitForPeers = () => {
-                const openCount = Object.values(peers).filter(p => p.dc && p.dc.readyState === "open").length
-                const totalPeers = (lobbyData.players.length - 1)  // minus host
-                if (openCount >= totalPeers || totalPeers === 0) {
-                    hostStartGame(lobbyData.players, lobbyData.settings)
-                    // Set host's own player in game state
-                    const me = gameState.players.find(p => p.id === HOST_ID)
-                    if (me) Object.assign(me, { name:playerData.name||me.name, decal:playerData.decal||null, boostTrail:playerData.boostTrail||null })
-                    // Init host renderer
-                    onGameInit({ myId: HOST_ID, players: gameState.players, settings: gameState.settings })
-                    hideConnecting()
-                    // Tell signaling server the game started
-                    sigSocket.emit("gameStarted", { room: roomCode })
-                    localStorage.removeItem("lobbyData")
-                } else {
-                    showConnecting(`Esperando ${totalPeers - openCount} jugador(es)...`)
-                    setTimeout(waitForPeers, 300)
-                }
-            }
-            setTimeout(waitForPeers, 500)
-        } else {
-            // Solo host testing
-            hostStartGame([{ id: sigSocket.id, ...playerData, team: playerData.team||"blue" }], {
-                blueTeamName:"BLUE", orangeTeamName:"ORANGE",
-                blueColor:"#00aaff", orangeColor:"#ff6600",
-                seriesTitle:"FRIENDLY MATCH", gameNum:1, bestOf:7
+
+        if(lobbyData && lobbyData.players.length > 0){
+            // Start physics immediately — peers may already be connected
+            // (DataChannels opened in lobby.html are still alive)
+            hostStartGame(lobbyData.players, lobbyData.settings)
+
+            // Patch host's own player with fresh data
+            const me = gameState.players.find(p => p.id === HOST_ID)
+            if(me) Object.assign(me, {
+                name:      playerData.name       || me.name,
+                decal:     playerData.decal      || null,
+                boostTrail:playerData.boostTrail || null
             })
-            onGameInit({ myId: sigSocket.id, players: gameState.players, settings: gameState.settings })
+
+            // Send init to any peers that are already connected
+            Object.entries(peers).forEach(([peerId, {dc}]) => {
+                if(dc.readyState === "open"){
+                    dc.send(JSON.stringify({
+                        type:"init", myId:peerId,
+                        players:gameState.players, settings:gameState.settings
+                    }))
+                }
+            })
+
+            onGameInit({ myId: HOST_ID, players: gameState.players, settings: gameState.settings })
+            hideConnecting()
+            sigSocket.emit("gameStarted", { room: roomCode })
+            localStorage.removeItem("lobbyData")
+        } else {
+            // Solo / debug mode
+            HOST_ID = HOST_ID || "solo"
+            myId    = HOST_ID
+            hostStartGame(
+                [{ id: HOST_ID, ...playerData, team: playerData.team||"blue" }],
+                { blueTeamName:"BLUE", orangeTeamName:"ORANGE",
+                  blueColor:"#00aaff", orangeColor:"#ff6600",
+                  seriesTitle:"CHAMPIONS FIELD", gameNum:1, bestOf:7 }
+            )
+            onGameInit({ myId: HOST_ID, players: gameState.players, settings: gameState.settings })
             hideConnecting()
         }
     }
 
-    // ── CLIENT PATH ────────────────────────────────────────────
+    // ── CLIENT ────────────────────────────────────────────────
     else {
         isHost = false
-        showConnecting("Conectando con el host...")
-
         const hostId = localStorage.getItem("hostId")
-        if (!hostId) {
+        if(!hostId){
             document.getElementById("connecting-title").textContent = "ERROR"
-            document.getElementById("connecting-msg").textContent   = "No se encontró el host. Vuelve al lobby."
+            showConnecting("Host no encontrado. Vuelve al lobby.")
             return
         }
+        myId = null  // will be set via onGameInit
 
-        sigSocket.on("connect", () => {
-            myId = sigSocket.id
-            // Now connect to host via WebRTC
+        // The DataChannel was opened in lobby.html and is already in _dc.
+        // Just wire the callbacks and wait for the first state packet.
+        if(_dc && _dc.readyState === "open"){
+            // Already connected — re-wire message handler
+            _dc.onmessage = e => { try{ onHostMessage(JSON.parse(e.data)) }catch{} }
+            showConnecting("Recibiendo estado del juego...")
+        } else {
+            showConnecting("Reconectando con el host...")
+            // If DataChannel closed during navigation, reconnect
             clientConnect(hostId, sigSocket, sigSocket.id)
-            // Tell signaling server we're joining the game room
-            sigSocket.emit("joinLobby", { room: roomCode, ...playerData })
-        })
+        }
 
-        // WebRTC signaling — host sends us an offer
-        sigSocket.on("rtc:offer", ({ from, offer }) => onRtcOffer(from, offer))
-        sigSocket.on("rtc:ice",   ({ from, candidate }) => onRtcIce(from, candidate))
-
-        // Host disconnected
-        sigSocket.on("hostDisconnected", () => {
-            onGameEvent({ type: "hostDisconnected" })
-        })
-
-        // DataChannel connected → hide connecting screen
-        // (handled inside client.js → onClientConnected → calls onStateUpdate soon after)
-        const origOnStateUpdate = window.onStateUpdate
-        window.onStateUpdate = function(data) {
-            if (document.getElementById("connecting").style.display !== "none") {
+        // Override onStateUpdate to hide connecting screen on first packet
+        const _orig = window.onStateUpdate
+        window.onStateUpdate = function(data){
+            if(document.getElementById("connecting").style.display !== "none"){
+                // Set myId from the state — find which player has our socket id
+                // The host sent us our id in the "init" packet via onGameInit
                 hideConnecting()
             }
-            onStateUpdate(data)
+            if(_orig) _orig(data); else onStateUpdate(data)
+        }
+
+        // onGameInit sets myId
+        const _origInit = window.onGameInit
+        window.onGameInit = function(data){
+            myId = data.myId
+            if(_origInit) _origInit(data); else onGameInit(data)
+            hideConnecting()
         }
     }
 })()
