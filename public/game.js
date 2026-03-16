@@ -196,14 +196,7 @@ document.addEventListener("keyup",e=>{
     keys[k]=false
 })
 function getInput(){
-    return{
-        w:    !!(keys.w    || keys._mw),
-        a:    !!(keys.a    || keys._ma),
-        s:    !!(keys.s    || keys._ms),
-        d:    !!(keys.d    || keys._md),
-        shift:!!(keys.shift|| keys._mshift),
-        dash: !!(keys.dash || keys._mdash)
-    }
+    return{w:!!keys.w,a:!!keys.a,s:!!keys.s,d:!!keys.d,shift:!!keys.shift,dash:!!keys.dash}
 }
 
 // Input loop is handled by game.html bootstrap (socket.emit "input")
